@@ -40,6 +40,7 @@ pub enum Statement {
         name: String,
         type_annot: Type,
         value: Box<Expression>,
+        mutable: bool,
     },
     Return(Option<Box<Expression>>),
     Expr(Box<Expression>),

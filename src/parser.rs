@@ -37,6 +37,14 @@ impl Parser {
             TokenKind::Let => {
                 self.advance(); // 吞掉 let
 
+                // 可选的 mut
+                let mutable = if self.current.kind == TokenKind::Mut {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+
                 // 变量名
                 let name = match &self.current.kind {
                     TokenKind::Identifier(s) => s.clone(),
@@ -71,6 +79,7 @@ impl Parser {
                     name,
                     type_annot,
                     value: Box::new(value),
+                    mutable,
                 }
             }
             TokenKind::Return => {

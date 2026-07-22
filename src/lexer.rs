@@ -318,6 +318,7 @@ impl Lexer {
         match name.as_str() {
             "fn" => TokenKind::Fn,
             "let" => TokenKind::Let,
+            "mut" => TokenKind::Mut,
             "return" => TokenKind::Return,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
