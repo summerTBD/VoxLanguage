@@ -6,6 +6,7 @@ use crate::vox_ast::{BinOp, Expression, Function, Program, Statement, Type};
 pub struct Codegen {
     output: String,
     indent_level: usize,
+    tmp_counter: u32,
 }
 
 impl Codegen {
@@ -13,7 +14,14 @@ impl Codegen {
         Codegen {
             output: String::new(),
             indent_level: 0,
+            tmp_counter: 0,
         }
+    }
+
+    fn fresh_tmp(&mut self) -> String {
+        let n = self.tmp_counter;
+        self.tmp_counter += 1;
+        format!("_t{}", n)
     }
 
     /// 编译整个程序，返回 C 源码
@@ -21,6 +29,7 @@ impl Codegen {
         // 头文件
         self.emit("#include <stdint.h>");
         self.emit("#include <stdio.h>");
+        self.emit("#include <gc.h>");
         self.emit("");
         self.emit("// === Vox 运行时 ===");
         self.emit("static int32_t print(int32_t x) {");
@@ -38,6 +47,27 @@ impl Codegen {
         self.dedent();
         self.emit("}");
         self.emit("");
+        self.emit("static void print_f64(double x) {");
+        self.indent();
+        self.emit("printf(\"%f\\n\", x);");
+        self.dedent();
+        self.emit("}");
+        self.emit("");
+        self.emit("static void print_str(const char* s) {");
+        self.indent();
+        self.emit("printf(\"%s\\n\", s);");
+        self.dedent();
+        self.emit("}");
+        self.emit("");
+
+        // struct 定义
+        if !program.structs.is_empty() {
+            self.emit("// === 结构体定义 ===");
+            for s in &program.structs {
+                self.compile_struct_def(s);
+            }
+            self.emit("");
+        }
 
         // 函数声明 —— 先声明所有函数，支持互相调用
         self.emit("// === 函数声明 ===");
@@ -70,22 +100,36 @@ impl Codegen {
         self.output.push_str(&format!("{}{}\n", pad, line));
     }
 
-    fn type_to_c(&self, ty: &Type) -> &str {
+    fn type_to_c(&self, ty: &Type) -> String {
         match ty {
-            Type::I32 => "int32_t",
-            Type::Bool => "int",
-            Type::String => "char*",
-            Type::Void => "void",
+            Type::I32 => "int32_t".to_string(),
+            Type::Bool => "int".to_string(),
+            Type::Str => "const char*".to_string(),
+            Type::F64 => "double".to_string(),
+            Type::Void => "void".to_string(),
+            Type::Struct(name) => format!("struct {}", name),
+            Type::Ptr(inner) => format!("{}*", self.type_to_c(inner)),
         }
     }
 
     /// C 函数的返回类型。main 强制为 int（C 标准要求）
-    fn ret_type_to_c(&self, func: &Function) -> &str {
+    fn ret_type_to_c(&self, func: &Function) -> String {
         if func.name == "main" {
-            "int"
+            "int".to_string()
         } else {
             self.type_to_c(&func.return_type)
         }
+    }
+
+    fn compile_struct_def(&mut self, s: &crate::vox_ast::StructDef) {
+        self.emit(&format!("struct {} {{", s.name));
+        self.indent();
+        for field in &s.fields {
+            let ty = self.type_to_c(&field.type_annot);
+            self.emit(&format!("{} {};", ty, field.name));
+        }
+        self.dedent();
+        self.emit("};");
     }
 
     // ==================== 函数 ====================
@@ -136,15 +180,29 @@ impl Codegen {
                 type_annot,
                 value,
                 mutable,
-                ..
             } => {
-                let ty = self.type_to_c(type_annot);
-                let val = self.compile_expr(value);
-
-                if *mutable {
-                    self.emit(&format!("{} {} = {};", ty, name, val));
+                // 堆分配 (new X{...}) 特殊处理
+                if let Expression::New {
+                    name: struct_name,
+                    fields,
+                } = value.as_ref()
+                {
+                    self.emit(&format!(
+                        "struct {}* {} = GC_malloc(sizeof(struct {}));",
+                        struct_name, name, struct_name
+                    ));
+                    for (f, v) in fields {
+                        let val = self.compile_expr(v);
+                        self.emit(&format!("{}->{} = {};", name, f, val));
+                    }
                 } else {
-                    self.emit(&format!("{} const {} = {};", ty, name, val));
+                    let ty = self.type_to_c(type_annot);
+                    let val = self.compile_expr(value);
+                    if *mutable {
+                        self.emit(&format!("{} {} = {};", ty, name, val));
+                    } else {
+                        self.emit(&format!("{} const {} = {};", ty, name, val));
+                    }
                 }
             }
             Statement::Return(expr) => {
@@ -201,9 +259,10 @@ impl Codegen {
 
     // ==================== 表达式 ====================
 
-    fn compile_expr(&self, expr: &Expression) -> String {
+    fn compile_expr(&mut self, expr: &Expression) -> String {
         match expr {
             Expression::IntLiteral(n) => n.to_string(),
+            Expression::FloatLiteral(n) => n.to_string(),
             Expression::StringLiteral(s) => format!("\"{}\"", s),
             Expression::BoolLiteral(b) => {
                 if *b {
@@ -226,6 +285,41 @@ impl Codegen {
             Expression::Call { name, args } => {
                 let args_str: Vec<String> = args.iter().map(|a| self.compile_expr(a)).collect();
                 format!("{}({})", name, args_str.join(", "))
+            }
+            Expression::StructLiteral { name, fields } => {
+                let inits: Vec<String> = fields
+                    .iter()
+                    .map(|(f, v)| format!(".{} = {}", f, self.compile_expr(v)))
+                    .collect();
+                format!("(struct {}){{ {} }}", name, inits.join(", "))
+            }
+            Expression::New { name, fields } => {
+                let tmp = self.fresh_tmp();
+                self.emit(&format!(
+                    "struct {}* {} = GC_malloc(sizeof(struct {}));",
+                    name, tmp, name
+                ));
+                for (f, v) in fields {
+                    let val = self.compile_expr(v);
+                    self.emit(&format!("{}->{} = {};", tmp, f, val));
+                }
+                tmp
+            }
+            Expression::FieldAccess { object, field } => {
+                let obj = self.compile_expr(object);
+                if matches!(object.as_ref(), Expression::Identifier(_)) {
+                    format!("{}->{}", obj, field)
+                } else {
+                    format!("{}.{}", obj, field)
+                }
+            }
+            Expression::AddrOf(inner) => {
+                let val = self.compile_expr(inner);
+                format!("(&{})", val)
+            }
+            Expression::Deref(inner) => {
+                let val = self.compile_expr(inner);
+                format!("(*{})", val)
             }
         }
     }

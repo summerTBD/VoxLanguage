@@ -8,6 +8,7 @@ pub enum TokenKind {
     Fn,
     While,
     Let,
+    New,
     Mut,
     Return,
     If,
@@ -18,29 +19,33 @@ pub enum TokenKind {
     // --- 类型关键字 ---
     I32,
     Bool,
-    String,
+    Str,
     Void,
+    F64,
+    Struct,
 
     // --- 字面量 ---
     IntLiteral(i64),
+    FloatLiteral(f64),
     StringLiteral(String),
     Identifier(String),
 
     // --- 运算符 ---
-    Plus,     // +
-    Minus,    // -
-    Star,     // *
-    Slash,    // /
-    Bang,     // !
-    Eq,       // =
-    EqEq,     // ==
-    NotEq,    // !=
-    Lt,       // <
-    Gt,       // >
-    LtEq,     // <=
-    GtEq,     // >=
-    AndAnd,   // &&
-    PipePipe, // ||
+    Plus,      // +
+    Minus,     // -
+    Star,      // *
+    Slash,     // /
+    Bang,      // !
+    Eq,        // =
+    EqEq,      // ==
+    NotEq,     // !=
+    Lt,        // <
+    Gt,        // >
+    LtEq,      // <=
+    GtEq,      // >=
+    Ampersand, // &
+    AndAnd,    // &&
+    PipePipe,  // ||
 
     // --- 分隔符 ---
     LParen,    // (
@@ -50,6 +55,7 @@ pub enum TokenKind {
     Comma,     // ,
     Colon,     // :
     Semicolon, // ;
+    Dot,       // .
 
     // --- 其他 ---
     Eof,

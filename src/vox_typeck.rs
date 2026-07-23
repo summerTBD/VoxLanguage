@@ -63,7 +63,7 @@ impl TypeChecker {
                 let actual = self.infer_expr(value);
                 if actual != *type_annot {
                     panic!(
-                        "类型错误: 变量 '{}' 声明为 {:?}，但初始值类型是 {:?}",
+                        "Type error: var '{}' declared {:?} but init is {:?}",
                         name, type_annot, actual
                     );
                 }
@@ -84,7 +84,7 @@ impl TypeChecker {
             } => {
                 let cond_ty = self.infer_expr(condition);
                 if cond_ty != Type::Bool {
-                    panic!("类型错误: if 条件必须是 bool，但得到 {:?}", cond_ty);
+                    panic!("Type error: if condition must be bool, got {:?}", cond_ty);
                 }
                 for stmt in &then_block.content {
                     self.check_stmt(stmt);
@@ -98,7 +98,7 @@ impl TypeChecker {
             Statement::While { condition, body } => {
                 let cond_ty = self.infer_expr(condition);
                 if cond_ty != Type::Bool {
-                    panic!("类型错误: while 条件必须是 bool，但得到 {:?}", cond_ty);
+                    panic!("Type error: while condition must be bool, got {:?}", cond_ty);
                 }
                 for stmt in &body.content {
                     self.check_stmt(stmt);
@@ -108,11 +108,11 @@ impl TypeChecker {
                 let expected = self
                     .variables
                     .get(name)
-                    .unwrap_or_else(|| panic!("类型错误: 未定义的变量 '{}'", name));
+                    .unwrap_or_else(|| panic!("Type error: undefined variable '{}'", name));
                 let actual = self.infer_expr(value);
                 if actual != *expected {
                     panic!(
-                        "类型错误: 变量 '{}' 类型为 {:?}，不能赋值为 {:?}",
+                        "Type error: var '{}' is {:?}, cannot assign {:?}",
                         name, expected, actual
                     );
                 }
@@ -125,13 +125,14 @@ impl TypeChecker {
     fn infer_expr(&self, expr: &Expression) -> Type {
         match expr {
             Expression::IntLiteral(_) => Type::I32,
-            Expression::StringLiteral(_) => Type::String,
+            Expression::FloatLiteral(_) => Type::F64,
+            Expression::StringLiteral(_) => Type::Str,
             Expression::BoolLiteral(_) => Type::Bool,
             Expression::Identifier(name) => self
                 .variables
                 .get(name)
                 .cloned()
-                .unwrap_or_else(|| panic!("类型错误: 未定义的变量 '{}'", name)),
+                .unwrap_or_else(|| panic!("Type error: undefined variable '{}'", name)),
             Expression::Binary { left, op, right } => {
                 let lt = self.infer_expr(left);
                 let rt = self.infer_expr(right);
@@ -139,10 +140,13 @@ impl TypeChecker {
                 match op {
                     // 算术：两边必须 i32，返回 i32
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                        if lt != Type::I32 || rt != Type::I32 {
-                            panic!("类型错误: 算术运算要求 i32，但得到 {:?} 和 {:?}", lt, rt);
+                        if (lt != Type::I32 && lt != Type::F64)
+                            || (rt != Type::I32 && rt != Type::F64)
+                            || lt != rt
+                        {
+                            panic!("Type error: arithmetic needs same type (i32 or f64), got {:?} and {:?}", lt, rt);
                         }
-                        Type::I32
+                        lt
                     }
                     // 比较：两边同类型，返回 bool
                     BinOp::Eq
@@ -152,14 +156,14 @@ impl TypeChecker {
                     | BinOp::LtEq
                     | BinOp::GtEq => {
                         if lt != rt {
-                            panic!("类型错误: 比较运算两边类型不同：{:?} 和 {:?}", lt, rt);
+                            panic!("Type error: comparison types differ: {:?} vs {:?}", lt, rt);
                         }
                         Type::Bool
                     }
                     // 逻辑：两边必须 bool，返回 bool
                     BinOp::And | BinOp::Or => {
                         if lt != Type::Bool || rt != Type::Bool {
-                            panic!("类型错误: 逻辑运算要求 bool，但得到 {:?} 和 {:?}", lt, rt);
+                            panic!("Type error: logic op needs bool, got {:?} and {:?}", lt, rt);
                         }
                         Type::Bool
                     }
@@ -168,28 +172,74 @@ impl TypeChecker {
             Expression::Not(inner) => {
                 let ty = self.infer_expr(inner);
                 if ty != Type::Bool {
-                    panic!("类型错误: ! 运算符要求 bool，但得到 {:?}", ty);
+                    panic!("Type error: ! needs bool, got {:?}", ty);
                 }
                 Type::Bool
+            }
+            Expression::StructLiteral { name, .. } => Type::Struct(name.clone()),
+            Expression::New { name, .. } => Type::Struct(name.clone()),
+            Expression::FieldAccess { object, field } => {
+                let obj_ty = self.infer_expr(object);
+                match obj_ty {
+                    Type::Struct(_) => Type::I32, // 简化：字段类型未知，默认 i32
+                    _ => panic!(
+                        "Type error: {:?} is not a struct，不能访问字段 '{}'",
+                        obj_ty, field
+                    ),
+                }
+            }
+            Expression::AddrOf(inner) => {
+                let inner_ty = self.infer_expr(inner);
+                Type::Ptr(Box::new(inner_ty))
+            }
+            Expression::Deref(inner) => {
+                let inner_ty = self.infer_expr(inner);
+                match inner_ty {
+                    Type::Ptr(pointee) => *pointee,
+                    _ => panic!(
+                        "Type error: cannot dereference non-pointer type {:?}",
+                        inner_ty
+                    ),
+                }
             }
             Expression::Call { name, args } => {
                 match name.as_str() {
                     "print" => {
                         if args.len() != 1 {
-                            panic!("类型错误: print 需要 1 个参数");
+                            panic!("Type error: print needs 1 arg(s)");
                         }
                         let arg_ty = self.infer_expr(&args[0]);
                         if arg_ty != Type::I32 && arg_ty != Type::Bool {
                             panic!(
-                                "类型错误: print 参数必须是 i32 或 bool，但得到 {:?}",
+                                "Type error: print arg must be i32 or bool, got {:?}",
                                 arg_ty
                             );
                         }
                         Type::Void
                     }
+                    "print_str" => {
+                        if args.len() != 1 {
+                            panic!("Type error: print_str needs 1 arg(s)");
+                        }
+                        let arg_ty = self.infer_expr(&args[0]);
+                        if arg_ty != Type::Str {
+                            panic!("Type error: print_str arg must be str, got {:?}", arg_ty);
+                        }
+                        Type::Void
+                    }
+                    "print_f64" => {
+                        if args.len() != 1 {
+                            panic!("Type error: print_f64 needs 1 arg(s)");
+                        }
+                        let arg_ty = self.infer_expr(&args[0]);
+                        if arg_ty != Type::F64 {
+                            panic!("Type error: print_f64 arg must be f64, got {:?}", arg_ty);
+                        }
+                        Type::Void
+                    }
                     "read_i32" => {
                         if !args.is_empty() {
-                            panic!("类型错误: read_i32 不需要参数");
+                            panic!("Type error: read_i32 takes no args");
                         }
                         Type::I32
                     }
@@ -199,7 +249,7 @@ impl TypeChecker {
                             .functions
                             .get(name)
                             .cloned()
-                            .unwrap_or_else(|| panic!("类型错误: 未定义的函数 '{}'", name));
+                            .unwrap_or_else(|| panic!("Type error: undefined function '{}'", name));
                         for arg in args {
                             self.infer_expr(arg);
                         }
@@ -210,3 +260,4 @@ impl TypeChecker {
         }
     }
 }
+

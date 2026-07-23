@@ -2,6 +2,7 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    pub structs: Vec<StructDef>,
     pub functions: Vec<Function>,
 }
 
@@ -22,14 +23,28 @@ pub struct Param {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     I32,
-    String,
+    Str,
     Bool,
     Void,
+    F64,
+    Struct(String),
+    Ptr(Box<Type>), // *i32 **i32
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub content: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructDef {
+    pub name: String,
+    pub fields: Vec<StructField>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructField {
+    pub name: String,
+    pub type_annot: Type,
 }
 
 //第二层：语句
@@ -80,6 +95,7 @@ pub enum BinOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     IntLiteral(i64),
+    FloatLiteral(f64),
     StringLiteral(String),
     BoolLiteral(bool),
     Identifier(String),
@@ -92,5 +108,19 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+    StructLiteral {
+        name: String,
+        fields: Vec<(String, Expression)>,
+    },
+    FieldAccess {
+        object: Box<Expression>,
+        field: String,
+    },
     Not(Box<Expression>),
+    New {
+        name: String,
+        fields: Vec<(String, Expression)>,
+    },
+    AddrOf(Box<Expression>),
+    Deref(Box<Expression>),
 }

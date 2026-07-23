@@ -1,7 +1,16 @@
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn add(a: i32, b: i32): i32 {
+    return a + b;
+}
+
 fn main() {
-    if !true {
-        print(1);
-    } else {
-        print(0);
-    }
+    let p: Point = new Point {
+        x: 10,
+        y: 20,
+    };
+    print(add(p.x, p.y));
 }

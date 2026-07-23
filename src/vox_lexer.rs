@@ -154,6 +154,10 @@ impl Lexer {
                     self.advance();
                     TokenKind::Colon
                 }
+                '.' => {
+                    self.advance();
+                    TokenKind::Dot
+                }
                 ';' => {
                     self.advance();
                     TokenKind::Semicolon
@@ -213,11 +217,7 @@ impl Lexer {
                     if self.match_char('&') {
                         TokenKind::AndAnd
                     } else {
-                        // 预留 & 引用运算符，暂不支持就报错
-                        panic!(
-                            "词法错误: 第{}行第{}列: 不支持的字符 '&'（需要双写 &&）",
-                            line, col
-                        );
+                        TokenKind::Ampersand
                     }
                 }
                 '|' => {
@@ -226,7 +226,7 @@ impl Lexer {
                         TokenKind::PipePipe
                     } else {
                         panic!(
-                            "词法错误: 第{}行第{}列: 不支持的字符 '|'（需要双写 ||）",
+                            "Lex error: line {} col {}: '|' not supported (use ||)",
                             line, col
                         );
                     }
@@ -242,7 +242,10 @@ impl Lexer {
                 // --- 非法字符 ---
                 _ => {
                     self.advance();
-                    panic!("词法错误: 第{}行第{}列: 不识别的字符 '{}'", line, col, ch);
+                    panic!(
+                        "Lex error: line {} col {}: unknown char '{}'",
+                        line, col, ch
+                    );
                 }
             },
         };
@@ -257,7 +260,7 @@ impl Lexer {
         loop {
             match self.peek() {
                 None => panic!(
-                    "词法错误: 第{}行第{}列: 字符串没有闭合",
+                    "Lex error: line {} col {}: unclosed string",
                     self.line, self.col
                 ),
                 Some('"') => {
@@ -276,7 +279,7 @@ impl Lexer {
                             s.push('\\');
                             s.push(c);
                         }
-                        None => panic!("词法错误: 字符串中反斜杠后没有字符"),
+                        None => panic!("Lex error: incomplete escape sequence"),
                     }
                 }
                 Some(ch) => {
@@ -288,7 +291,7 @@ impl Lexer {
         TokenKind::StringLiteral(s)
     }
 
-    /// 读取整数 42
+    /// 读取整数或浮点数
     fn read_number(&mut self) -> TokenKind {
         let mut num_str = String::new();
         while let Some(ch) = self.peek() {
@@ -299,8 +302,24 @@ impl Lexer {
                 break;
             }
         }
-        let value: i64 = num_str.parse().expect("词法错误: 无法解析整数");
-        TokenKind::IntLiteral(value)
+        // 浮点数：数字后跟 .
+        if self.peek() == Some('.') && self.peek_next().map_or(false, |c| c.is_ascii_digit()) {
+            num_str.push('.');
+            self.advance(); // 跳过 .
+            while let Some(ch) = self.peek() {
+                if ch.is_ascii_digit() {
+                    num_str.push(ch);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            let value: f64 = num_str.parse().expect("Lex error: invalid float");
+            TokenKind::FloatLiteral(value)
+        } else {
+            let value: i64 = num_str.parse().expect("Lex error: invalid integer");
+            TokenKind::IntLiteral(value)
+        }
     }
 
     /// 读取标识符或关键字
@@ -325,11 +344,13 @@ impl Lexer {
             "true" => TokenKind::True,
             "false" => TokenKind::False,
             "while" => TokenKind::While,
-            "!" => TokenKind::Bang,
+            "new" => TokenKind::New,
+            "struct" => TokenKind::Struct,
             // 类型关键字
             "i32" => TokenKind::I32,
             "bool" => TokenKind::Bool,
-            "string" => TokenKind::String,
+            "str" => TokenKind::Str,
+            "f64" => TokenKind::F64,
             "void" => TokenKind::Void,
             _ => TokenKind::Identifier(name),
         }

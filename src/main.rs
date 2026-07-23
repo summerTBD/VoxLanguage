@@ -23,37 +23,44 @@ fn main() {
     let lexer = Lexer::new(&source);
     let mut parser = Parser::new(lexer);
     let program = parser.parse_program();
-    println!("=== Vox → AST 完成 ===");
+    println!("=== Vox -> AST OK ===");
 
     // 2. 类型检查
     let mut typeck = TypeChecker::new();
     typeck.check(&program);
-    println!("=== 类型检查通过 ===");
+    println!("=== Type check OK ===");
 
     // 3. AST → C 代码
     let codegen = Codegen::new();
     let c_code = codegen.compile(&program);
-    println!("\n=== 生成的 C 代码 ===\n{}", c_code);
+    println!("\n=== Generated C code ===\n{}", c_code);
 
     // 3. 写入 C 文件
     let c_path = input_path.with_extension("c");
     std::fs::write(&c_path, &c_code).expect("写入 C 文件失败");
 
-    // 4. gcc 编译
-    println!("=== 用 gcc 编译 ===");
+    // 4. gcc 编译（链接 Boehm GC）
+    println!("=== gcc compile ===");
     let status = Command::new("gcc")
-        .args(&[c_path.to_str().unwrap(), "-o", out_name.to_str().unwrap()])
+        .args(&[
+            c_path.to_str().unwrap(),
+            "-o",
+            out_name.to_str().unwrap(),
+            "-I",
+            r"E:\Dev_Evens\_BoehmGC\gc-8.2.12\include",
+            r"E:\Dev_Evens\_BoehmGC\gc-8.2.12\libgc.a",
+        ])
         .status()
         .expect("调用 gcc 失败");
 
     if !status.success() {
-        eprintln!("编译失败！");
+        eprintln!("compile failed!");
         return;
     }
-    println!("编译成功 → {}", out_name.display());
+    println!("compile OK -> {}", out_name.display());
 
     // 5. 运行
-    println!("\n=== 运行 {} ===", out_name.display());
+    println!("\n=== Run {} ===", out_name.display());
     let run = Command::new(format!(".\\{}", out_name.display()))
         .output()
         .expect("运行失败");

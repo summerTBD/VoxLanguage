@@ -1,5 +1,7 @@
 use crate::{
-    vox_ast::{BinOp, Block, Expression, Function, Param, Program, Statement, Type},
+    vox_ast::{
+        BinOp, Block, Expression, Function, Param, Program, Statement, StructDef, StructField, Type,
+    },
     vox_lexer::Lexer,
     vox_token::{Token, TokenKind},
 };
@@ -26,7 +28,7 @@ impl Parser {
     pub fn expect(&self, expected: TokenKind) {
         if self.current.kind != expected {
             panic!(
-                "语法错误: 第{}行第{}列: 期望 {:?}，但得到 {:?}",
+                "Syntax error: line {} col {}: expected {:?}, got {:?}",
                 self.current.line, self.current.col, expected, self.current.kind
             );
         }
@@ -49,7 +51,7 @@ impl Parser {
                 let name = match &self.current.kind {
                     TokenKind::Identifier(s) => s.clone(),
                     _ => panic!(
-                        "语法错误: 第{}行: let 后面期望变量名，但得到 {:?}",
+                        "Syntax error: line {}: expected variable name after let, got {:?}",
                         self.current.line, self.current.kind
                     ),
                 };
@@ -169,7 +171,7 @@ impl Parser {
                     Statement::Expr(Box::new(Expression::Call { name, args }))
                 } else {
                     panic!(
-                        "语法错误: 第{}行: 期望 = 或 (，但得到 {:?}",
+                        "Syntax error: line {}: expected = or (, got {:?}",
                         self.current.line, self.current.kind
                     );
                 }
@@ -185,13 +187,22 @@ impl Parser {
     }
 
     pub fn parse_type(&mut self) -> Type {
-        let ty = match self.current.kind {
+        // 递归处理 * 前缀：*i32, **i32, *MyStruct
+        if self.current.kind == TokenKind::Star {
+            self.advance(); // 吞掉 *
+            let inner = self.parse_type();
+            return Type::Ptr(Box::new(inner));
+        }
+
+        let ty = match &self.current.kind {
             TokenKind::I32 => Type::I32,
             TokenKind::Bool => Type::Bool,
-            TokenKind::String => Type::String,
+            TokenKind::Str => Type::Str,
             TokenKind::Void => Type::Void,
+            TokenKind::F64 => Type::F64,
+            TokenKind::Identifier(name) => Type::Struct(name.clone()),
             _ => panic!(
-                "语法错误: 第{}行: 期望类型注解 (i32/bool/string/void)，但得到 {:?}",
+                "Syntax error: line {}: expected type (i32/bool/str/void or struct name), got {:?}",
                 self.current.line, self.current.kind
             ),
         };
@@ -256,7 +267,7 @@ impl Parser {
 
     /// * /
     fn parse_multiplication(&mut self) -> Expression {
-        let mut left = self.parse_primary();
+        let mut left = self.parse_postfix();
 
         loop {
             let op = match self.current.kind {
@@ -265,7 +276,7 @@ impl Parser {
                 _ => break,
             };
             self.advance();
-            let right = self.parse_primary();
+            let right = self.parse_postfix();
             left = Expression::Binary {
                 left: Box::new(left),
                 op,
@@ -281,13 +292,52 @@ impl Parser {
         match &self.current.kind {
             TokenKind::Bang => {
                 self.advance(); // 吞掉 !
-                let inner = self.parse_primary();
+                let inner = self.parse_postfix();
                 Expression::Not(Box::new(inner))
+            }
+            TokenKind::New => {
+                self.advance(); // 吞掉 new
+                let name = match &self.current.kind {
+                    TokenKind::Identifier(s) => s.clone(),
+                    _ => panic!(
+                        "Syntax error: line {}: expected struct name after new",
+                        self.current.line
+                    ),
+                };
+                self.advance();
+                self.expect(TokenKind::LBrace);
+                self.advance();
+                let mut fields = Vec::new();
+                while self.current.kind != TokenKind::RBrace {
+                    let fname = match &self.current.kind {
+                        TokenKind::Identifier(s) => s.clone(),
+                        _ => panic!(
+                            "Syntax error: line {}: expected field name",
+                            self.current.line
+                        ),
+                    };
+                    self.advance();
+                    self.expect(TokenKind::Colon);
+                    self.advance();
+                    let val = self.parse_expr();
+                    fields.push((fname, val));
+                    if self.current.kind == TokenKind::Comma {
+                        self.advance();
+                    }
+                }
+                self.expect(TokenKind::RBrace);
+                self.advance();
+                Expression::New { name, fields }
             }
             TokenKind::IntLiteral(n) => {
                 let val = *n;
                 self.advance();
                 Expression::IntLiteral(val)
+            }
+            TokenKind::FloatLiteral(n) => {
+                let val = *n;
+                self.advance();
+                Expression::FloatLiteral(val)
             }
             TokenKind::StringLiteral(s) => {
                 let val = s.clone();
@@ -306,8 +356,30 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
 
-                // 函数调用：标识符后跟 (
-                if self.current.kind == TokenKind::LParen {
+                // struct 字面量：Point { x: 10, y: 20 }
+                if self.current.kind == TokenKind::LBrace {
+                    self.advance(); // 跳过 {
+                    let mut fields = Vec::new();
+                    while self.current.kind != TokenKind::RBrace {
+                        let field_name = match &self.current.kind {
+                            TokenKind::Identifier(s) => s.clone(),
+                            _ => panic!("语法错误: 第{}行: 期望字段名", self.current.line),
+                        };
+                        self.advance();
+                        self.expect(TokenKind::Colon);
+                        self.advance();
+                        let value = self.parse_expr();
+                        fields.push((field_name, value));
+                        if self.current.kind == TokenKind::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenKind::RBrace);
+                    self.advance();
+                    Expression::StructLiteral { name, fields }
+                }
+                // 函数调用：foo(args)
+                else if self.current.kind == TokenKind::LParen {
                     self.advance(); // 跳过 (
                     let mut args = Vec::new();
 
@@ -337,11 +409,46 @@ impl Parser {
                 self.advance(); // 跳过 )
                 expr
             }
+
+            // &expr  取地址（一元前缀运算符，优先级同解引用）
+            TokenKind::Ampersand => {
+                self.advance();
+                let expr = self.parse_postfix();
+                Expression::AddrOf(Box::new(expr))
+            }
+
+            // *expr  解引用（一元前缀运算符，优先级同取地址）
+            TokenKind::Star => {
+                self.advance();
+                let expr = self.parse_postfix();
+                Expression::Deref(Box::new(expr))
+            }
+
             _ => panic!(
-                "语法错误: 第{}行: 期望表达式，但得到 {:?}",
+                "Syntax error: line {}: expected expression, got {:?}",
                 self.current.line, self.current.kind
             ),
         }
+    }
+
+    /// 后缀操作：p.x 字段访问
+    fn parse_postfix(&mut self) -> Expression {
+        let mut expr = self.parse_primary();
+
+        while self.current.kind == TokenKind::Dot {
+            self.advance(); // 跳过 .
+            let field = match &self.current.kind {
+                TokenKind::Identifier(s) => s.clone(),
+                _ => panic!("语法错误: 第{}行: 期望字段名", self.current.line),
+            };
+            self.advance();
+            expr = Expression::FieldAccess {
+                object: Box::new(expr),
+                field,
+            };
+        }
+
+        expr
     }
 
     // ==================== 块解析 ====================
@@ -363,12 +470,69 @@ impl Parser {
 
     pub fn parse_program(&mut self) -> Program {
         let mut functions = Vec::new();
+        let mut structs = Vec::new();
 
         while self.current.kind != TokenKind::Eof {
-            functions.push(self.parse_function());
+            if self.current.kind == TokenKind::Fn {
+                functions.push(self.parse_function());
+            } else if self.current.kind == TokenKind::Struct {
+                structs.push(self.parse_struct_def());
+            } else {
+                panic!(
+                    "Syntax error: line {}: expected fn or struct, got {:?}",
+                    self.current.line, self.current.kind
+                );
+            }
         }
 
-        Program { functions }
+        Program { functions, structs }
+    }
+
+    pub fn parse_struct_def(&mut self) -> StructDef {
+        self.expect(TokenKind::Struct);
+        self.advance(); // 跳过 struct
+
+        // 结构体名
+        let name = match &self.current.kind {
+            TokenKind::Identifier(s) => s.clone(),
+            _ => panic!(
+                "Syntax error: line {}: expected struct name",
+                self.current.line
+            ),
+        };
+        self.advance();
+
+        // { 字段 }
+        self.expect(TokenKind::LBrace);
+        self.advance();
+
+        let mut fields = Vec::new();
+        while self.current.kind != TokenKind::RBrace {
+            let field_name = match &self.current.kind {
+                TokenKind::Identifier(s) => s.clone(),
+                _ => panic!("语法错误: 第{}行: 期望字段名", self.current.line),
+            };
+            self.advance();
+
+            self.expect(TokenKind::Colon);
+            self.advance();
+
+            let type_annot = self.parse_type(); //会往前移动一个Token
+
+            fields.push(StructField {
+                name: field_name,
+                type_annot,
+            });
+
+            if self.current.kind == TokenKind::Comma {
+                self.advance();
+            }
+        }
+
+        self.expect(TokenKind::RBrace);
+        self.advance();
+
+        StructDef { name, fields }
     }
 
     pub fn parse_function(&mut self) -> Function {
@@ -379,7 +543,7 @@ impl Parser {
         let name = match &self.current.kind {
             TokenKind::Identifier(s) => s.clone(),
             _ => panic!(
-                "语法错误: 第{}行: fn 后面期望函数名，但得到 {:?}",
+                "Syntax error: line {}: expected function name after fn, got {:?}",
                 self.current.line, self.current.kind
             ),
         };
@@ -426,7 +590,7 @@ impl Parser {
             let name = match &self.current.kind {
                 TokenKind::Identifier(s) => s.clone(),
                 _ => panic!(
-                    "语法错误: 第{}行: 期望参数名，但得到 {:?}",
+                    "Syntax error: line {}: expected parameter name, got {:?}",
                     self.current.line, self.current.kind
                 ),
             };
