@@ -1,7 +1,7 @@
 // Vox 词法分析器 (Lexer)
 // v0.1 最小子集
 
-use crate::token::{Token, TokenKind};
+use crate::vox_token::{Token, TokenKind};
 
 /// 词法分析器：将源码字符串转换为 Token 流
 pub struct Lexer {
@@ -324,6 +324,8 @@ impl Lexer {
             "else" => TokenKind::Else,
             "true" => TokenKind::True,
             "false" => TokenKind::False,
+            "while" => TokenKind::While,
+            "!" => TokenKind::Bang,
             // 类型关键字
             "i32" => TokenKind::I32,
             "bool" => TokenKind::Bool,

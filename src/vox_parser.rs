@@ -1,7 +1,7 @@
 use crate::{
-    ast::{BinOp, Block, Expression, Function, Param, Program, Statement, Type},
-    lexer::Lexer,
-    token::{Token, TokenKind},
+    vox_ast::{BinOp, Block, Expression, Function, Param, Program, Statement, Type},
+    vox_lexer::Lexer,
+    vox_token::{Token, TokenKind},
 };
 
 pub struct Parser {
@@ -119,6 +119,61 @@ impl Parser {
                     else_block,
                 }
             }
+            TokenKind::While => {
+                self.advance(); // 吞掉 while
+
+                // 条件表达式
+                let condition = Box::new(self.parse_expr());
+
+                // { ... }
+                self.expect(TokenKind::LBrace);
+                self.advance();
+                let body = self.parse_block();
+
+                Statement::While { condition, body }
+            }
+
+            // 标识符开头：赋值 x = expr;  或 调用 print(args);
+            TokenKind::Identifier(_) => {
+                let name = match &self.current.kind {
+                    TokenKind::Identifier(s) => s.clone(),
+                    _ => unreachable!(),
+                };
+                self.advance(); // 吞掉标识符
+
+                if self.current.kind == TokenKind::Eq {
+                    // 赋值：x = expr;
+                    self.advance(); // 吞掉 =
+                    let value = Box::new(self.parse_expr());
+                    self.expect(TokenKind::Semicolon);
+                    self.advance();
+                    Statement::Assign { name, value }
+                } else if self.current.kind == TokenKind::LParen {
+                    // 函数调用：print(args)
+                    self.advance(); // 吞掉 (
+                    let mut args = Vec::new();
+                    if self.current.kind != TokenKind::RParen {
+                        loop {
+                            args.push(self.parse_expr());
+                            if self.current.kind == TokenKind::Comma {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    self.expect(TokenKind::RParen);
+                    self.advance(); // 吞掉 )
+                    self.expect(TokenKind::Semicolon);
+                    self.advance();
+                    Statement::Expr(Box::new(Expression::Call { name, args }))
+                } else {
+                    panic!(
+                        "语法错误: 第{}行: 期望 = 或 (，但得到 {:?}",
+                        self.current.line, self.current.kind
+                    );
+                }
+            }
             _ => {
                 // 表达式语句：print(y);  add(1, 2);
                 let expr = self.parse_expr();
@@ -224,6 +279,11 @@ impl Parser {
     /// 原子：字面量、标识符、函数调用、括号
     fn parse_primary(&mut self) -> Expression {
         match &self.current.kind {
+            TokenKind::Bang => {
+                self.advance(); // 吞掉 !
+                let inner = self.parse_primary();
+                Expression::Not(Box::new(inner))
+            }
             TokenKind::IntLiteral(n) => {
                 let val = *n;
                 self.advance();

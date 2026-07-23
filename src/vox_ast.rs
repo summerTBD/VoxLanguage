@@ -49,6 +49,14 @@ pub enum Statement {
         then_block: Block,
         else_block: Option<Block>,
     },
+    While {
+        condition: Box<Expression>,
+        body: Block,
+    },
+    Assign {
+        name: String,
+        value: Box<Expression>,
+    },
 }
 
 //第三层：表达式
@@ -84,4 +92,5 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+    Not(Box<Expression>),
 }

@@ -6,6 +6,7 @@
 pub enum TokenKind {
     // --- 关键字 ---
     Fn,
+    While,
     Let,
     Mut,
     Return,

@@ -1,7 +1,7 @@
 // Vox 代码生成模块 - 翻译 AST 到 C 源码
 // v0.1 最小子集
 
-use crate::ast::{BinOp, Expression, Function, Program, Statement, Type};
+use crate::vox_ast::{BinOp, Expression, Function, Program, Statement, Type};
 
 pub struct Codegen {
     output: String,
@@ -27,6 +27,14 @@ impl Codegen {
         self.indent();
         self.emit("printf(\"%d\\n\", x);");
         self.emit("return 0;");
+        self.dedent();
+        self.emit("}");
+        self.emit("");
+        self.emit("static int32_t read_i32() {");
+        self.indent();
+        self.emit("int32_t x;");
+        self.emit("scanf(\"%d\", &x);");
+        self.emit("return x;");
         self.dedent();
         self.emit("}");
         self.emit("");
@@ -151,6 +159,20 @@ impl Codegen {
                 let val = self.compile_expr(expr);
                 self.emit(&format!("{};", val));
             }
+            Statement::Assign { name, value } => {
+                let val = self.compile_expr(value);
+                self.emit(&format!("{} = {};", name, val));
+            }
+            Statement::While { condition, body } => {
+                let cond = self.compile_expr(condition);
+                self.emit(&format!("while ({}) {{", cond));
+                self.indent();
+                for stmt in &body.content {
+                    self.compile_stmt(stmt);
+                }
+                self.dedent();
+                self.emit("}");
+            }
             Statement::If {
                 condition,
                 then_block,
@@ -196,6 +218,10 @@ impl Codegen {
                 let r = self.compile_expr(right);
                 let op_str = self.binop_to_c(op);
                 format!("({} {} {})", l, op_str, r)
+            }
+            Expression::Not(inner) => {
+                let val = self.compile_expr(inner);
+                format!("!{val}")
             }
             Expression::Call { name, args } => {
                 let args_str: Vec<String> = args.iter().map(|a| self.compile_expr(a)).collect();

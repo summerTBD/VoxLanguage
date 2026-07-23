@@ -7,19 +7,22 @@ static int32_t print(int32_t x) {
     return 0;
 }
 
+static int32_t read_i32() {
+    int32_t x;
+    scanf("%d", &x);
+    return x;
+}
+
 // === 函数声明 ===
-int32_t add(int32_t a, int32_t b);
 int main();
 
 // === 函数定义 ===
-int32_t add(int32_t a, int32_t b) {
-    return (a + b);
-}
-
 int main() {
-    int32_t const x = 10;
-    int32_t const y = add(x, 5);
-    print(y);
+    if (!1) {
+        print(1);
+    } else {
+        print(0);
+    }
     return 0;
 }
 
