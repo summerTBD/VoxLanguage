@@ -3,11 +3,41 @@ struct Point {
     y: i32,
 }
 
+enum Color {
+    Red = 0,
+    Green = 1,
+    Blue = 2,
+}
+
 fn add(a: i32, b: i32): i32 {
     return a + b;
 }
 
+fn sum_arr(arr: *i32, len: i32): i32 {
+    let mut i: i32 = 0;
+    let mut s: i32 = 0;
+    while i < len {
+        s = s + arr[i];
+        i = i + 1;
+    }
+    return s;
+}
+
 fn main() {
+    let nums: [i32; 5] = [1, 2, 3, 4, 5];
+    print(nums[0]);
+    print(nums[4]);
+
+    let total: i32 = sum_arr(&nums[0], 5);
+    print(total);
+
+    let c: Color = Color.Green;
+    match c {
+        Red -> { print(100); }
+        Green -> { print(200); }
+        Blue -> { print(300); }
+    }
+
     let p: Point = new Point {
         x: 10,
         y: 20,

@@ -138,6 +138,14 @@ impl Lexer {
                     self.advance();
                     TokenKind::RParen
                 }
+                '[' => {
+                    self.advance();
+                    TokenKind::LBracket
+                }
+                ']' => {
+                    self.advance();
+                    TokenKind::RBracket
+                }
                 '{' => {
                     self.advance();
                     TokenKind::LBrace
@@ -170,7 +178,11 @@ impl Lexer {
                 }
                 '-' => {
                     self.advance();
-                    TokenKind::Minus
+                    if self.match_char('>') {
+                        TokenKind::Arrow
+                    } else {
+                        TokenKind::Minus
+                    }
                 }
                 '*' => {
                     self.advance();
@@ -346,6 +358,8 @@ impl Lexer {
             "while" => TokenKind::While,
             "new" => TokenKind::New,
             "struct" => TokenKind::Struct,
+            "enum" => TokenKind::Enum,
+            "match" => TokenKind::Match,
             // 类型关键字
             "i32" => TokenKind::I32,
             "bool" => TokenKind::Bool,

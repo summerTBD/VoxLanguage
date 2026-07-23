@@ -1,12 +1,15 @@
 // Vox 代码生成模块 - 翻译 AST 到 C 源码
 // v0.1 最小子集
 
+use std::collections::HashSet;
+
 use crate::vox_ast::{BinOp, Expression, Function, Program, Statement, Type};
 
 pub struct Codegen {
     output: String,
     indent_level: usize,
     tmp_counter: u32,
+    enum_names: HashSet<String>,
 }
 
 impl Codegen {
@@ -15,6 +18,7 @@ impl Codegen {
             output: String::new(),
             indent_level: 0,
             tmp_counter: 0,
+            enum_names: HashSet::new(),
         }
     }
 
@@ -26,6 +30,11 @@ impl Codegen {
 
     /// 编译整个程序，返回 C 源码
     pub fn compile(mut self, program: &Program) -> String {
+        // 收集枚举名
+        for e in &program.enums {
+            self.enum_names.insert(e.name.clone());
+        }
+
         // 头文件
         self.emit("#include <stdint.h>");
         self.emit("#include <stdio.h>");
@@ -69,6 +78,15 @@ impl Codegen {
             self.emit("");
         }
 
+        // enum 定义
+        if !program.enums.is_empty() {
+            self.emit("// === 枚举定义 ===");
+            for e in &program.enums {
+                self.compile_enum_def(e);
+            }
+            self.emit("");
+        }
+
         // 函数声明 —— 先声明所有函数，支持互相调用
         self.emit("// === 函数声明 ===");
         for func in &program.functions {
@@ -107,8 +125,15 @@ impl Codegen {
             Type::Str => "const char*".to_string(),
             Type::F64 => "double".to_string(),
             Type::Void => "void".to_string(),
-            Type::Struct(name) => format!("struct {}", name),
+            Type::Adt { name, .. } => {
+                if self.enum_names.contains(name) {
+                    format!("enum {}", name)
+                } else {
+                    format!("struct {}", name)
+                }
+            }
             Type::Ptr(inner) => format!("{}*", self.type_to_c(inner)),
+            Type::Array(elem, size) => format!("{}[{}]", self.type_to_c(elem), size),
         }
     }
 
@@ -127,6 +152,16 @@ impl Codegen {
         for field in &s.fields {
             let ty = self.type_to_c(&field.type_annot);
             self.emit(&format!("{} {};", ty, field.name));
+        }
+        self.dedent();
+        self.emit("};");
+    }
+
+    fn compile_enum_def(&mut self, e: &crate::vox_ast::EnumDef) {
+        self.emit(&format!("enum {} {{", e.name));
+        self.indent();
+        for v in &e.variants {
+            self.emit(&format!("{} = {},", v.name, v.discriminant));
         }
         self.dedent();
         self.emit("};");
@@ -181,6 +216,23 @@ impl Codegen {
                 value,
                 mutable,
             } => {
+                // 数组声明特殊处理：let arr: [i32; 3] = [1, 2, 3];
+                if let Type::Array(elem_ty, _size) = type_annot {
+                    if let Expression::ArrayLiteral(elements) = value.as_ref() {
+                        let elem_c = self.type_to_c(elem_ty);
+                        let inits: Vec<String> =
+                            elements.iter().map(|e| self.compile_expr(e)).collect();
+                        self.emit(&format!(
+                            "{} {}[{}] = {{ {} }};",
+                            elem_c,
+                            name,
+                            elements.len(),
+                            inits.join(", ")
+                        ));
+                        return;
+                    }
+                }
+
                 // 堆分配 (new X{...}) 特殊处理
                 if let Expression::New {
                     name: struct_name,
@@ -220,6 +272,23 @@ impl Codegen {
             Statement::Assign { name, value } => {
                 let val = self.compile_expr(value);
                 self.emit(&format!("{} = {};", name, val));
+            }
+            Statement::Match { expr, arms } => {
+                let val = self.compile_expr(expr);
+                self.emit(&format!("switch ({}) {{", val));
+                self.indent();
+                for arm in arms {
+                    self.emit(&format!("case {}: {{", arm.pattern));
+                    self.indent();
+                    for stmt in &arm.body.content {
+                        self.compile_stmt(stmt);
+                    }
+                    self.emit("break;");
+                    self.dedent();
+                    self.emit("}");
+                }
+                self.dedent();
+                self.emit("}");
             }
             Statement::While { condition, body } => {
                 let cond = self.compile_expr(condition);
@@ -286,13 +355,6 @@ impl Codegen {
                 let args_str: Vec<String> = args.iter().map(|a| self.compile_expr(a)).collect();
                 format!("{}({})", name, args_str.join(", "))
             }
-            Expression::StructLiteral { name, fields } => {
-                let inits: Vec<String> = fields
-                    .iter()
-                    .map(|(f, v)| format!(".{} = {}", f, self.compile_expr(v)))
-                    .collect();
-                format!("(struct {}){{ {} }}", name, inits.join(", "))
-            }
             Expression::New { name, fields } => {
                 let tmp = self.fresh_tmp();
                 self.emit(&format!(
@@ -306,6 +368,12 @@ impl Codegen {
                 tmp
             }
             Expression::FieldAccess { object, field } => {
+                // 枚举访问：Color.Red → 直接输出 Red
+                if let Expression::Identifier(obj_name) = object.as_ref() {
+                    if self.enum_names.contains(obj_name) {
+                        return field.clone();
+                    }
+                }
                 let obj = self.compile_expr(object);
                 if matches!(object.as_ref(), Expression::Identifier(_)) {
                     format!("{}->{}", obj, field)
@@ -320,6 +388,15 @@ impl Codegen {
             Expression::Deref(inner) => {
                 let val = self.compile_expr(inner);
                 format!("(*{})", val)
+            }
+            Expression::ArrayLiteral(elements) => {
+                let inits: Vec<String> = elements.iter().map(|e| self.compile_expr(e)).collect();
+                format!("{{ {} }}", inits.join(", "))
+            }
+            Expression::Index { array, index } => {
+                let arr = self.compile_expr(array);
+                let idx = self.compile_expr(index);
+                format!("{}[{}]", arr, idx)
             }
         }
     }

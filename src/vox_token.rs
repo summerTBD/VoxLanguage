@@ -15,6 +15,7 @@ pub enum TokenKind {
     Else,
     True,
     False,
+    Match,
 
     // --- 类型关键字 ---
     I32,
@@ -23,6 +24,7 @@ pub enum TokenKind {
     Void,
     F64,
     Struct,
+    Enum,
 
     // --- 字面量 ---
     IntLiteral(i64),
@@ -46,10 +48,13 @@ pub enum TokenKind {
     Ampersand, // &
     AndAnd,    // &&
     PipePipe,  // ||
+    Arrow,     // ->
 
     // --- 分隔符 ---
     LParen,    // (
     RParen,    // )
+    LBracket,  // [
+    RBracket,  // ]
     LBrace,    // {
     RBrace,    // }
     Comma,     // ,

@@ -3,6 +3,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub structs: Vec<StructDef>,
+    pub enums: Vec<EnumDef>,
     pub functions: Vec<Function>,
 }
 
@@ -27,8 +28,9 @@ pub enum Type {
     Bool,
     Void,
     F64,
-    Struct(String),
-    Ptr(Box<Type>), // *i32 **i32
+    Ptr(Box<Type>),                        // *i32 **i32
+    Array(Box<Type>, usize),               // [i32; 10]
+    Adt { name: String, args: Vec<Type> }, // Point, Color, Vec<i32>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +47,18 @@ pub struct StructDef {
 pub struct StructField {
     pub name: String,
     pub type_annot: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDef {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariant {
+    pub name: String,
+    pub discriminant: i32,
 }
 
 //第二层：语句
@@ -72,6 +86,16 @@ pub enum Statement {
         name: String,
         value: Box<Expression>,
     },
+    Match {
+        expr: Box<Expression>,
+        arms: Vec<MatchArm>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm {
+    pub pattern: String, // 变体名
+    pub body: Block,
 }
 
 //第三层：表达式
@@ -108,10 +132,7 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
-    StructLiteral {
-        name: String,
-        fields: Vec<(String, Expression)>,
-    },
+    // 字段/变体访问
     FieldAccess {
         object: Box<Expression>,
         field: String,
@@ -123,4 +144,9 @@ pub enum Expression {
     },
     AddrOf(Box<Expression>),
     Deref(Box<Expression>),
+    ArrayLiteral(Vec<Expression>),
+    Index {
+        array: Box<Expression>,
+        index: Box<Expression>,
+    },
 }

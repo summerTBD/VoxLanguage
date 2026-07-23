@@ -9,6 +9,10 @@ pub struct TypeChecker {
     functions: HashMap<String, Type>,
     /// 变量名 → 类型（每函数重新填充）
     variables: HashMap<String, Type>,
+    /// 结构体名 → (字段名 → 字段类型)
+    structs: HashMap<String, HashMap<String, Type>>,
+    // 枚举体名
+    enums: HashMap<String, HashMap<String, i32>>,
 }
 
 impl TypeChecker {
@@ -16,18 +20,38 @@ impl TypeChecker {
         TypeChecker {
             functions: HashMap::new(),
             variables: HashMap::new(),
+            structs: HashMap::new(),
+            enums: HashMap::new(),
         }
     }
 
     /// 检查整个程序
     pub fn check(&mut self, program: &Program) {
-        // 第一遍：注册所有函数签名
+        // 第一遍：注册所有结构体字段
+        for s in &program.structs {
+            let mut fields = HashMap::new();
+            for f in &s.fields {
+                fields.insert(f.name.clone(), f.type_annot.clone());
+            }
+            self.structs.insert(s.name.clone(), fields);
+        }
+
+        // 第二遍：注册所有函数签名
         for func in &program.functions {
             self.functions
                 .insert(func.name.clone(), func.return_type.clone());
         }
 
-        // 第二遍：检查每个函数体
+        // 第三遍：注册所有枚举变体
+        for e in &program.enums {
+            let mut variants = HashMap::new();
+            for v in &e.variants {
+                variants.insert(v.name.clone(), v.discriminant);
+            }
+            self.enums.insert(e.name.clone(), variants);
+        }
+
+        // 第四遍：检查每个函数体
         for func in &program.functions {
             self.check_function(func);
         }
@@ -98,7 +122,10 @@ impl TypeChecker {
             Statement::While { condition, body } => {
                 let cond_ty = self.infer_expr(condition);
                 if cond_ty != Type::Bool {
-                    panic!("Type error: while condition must be bool, got {:?}", cond_ty);
+                    panic!(
+                        "Type error: while condition must be bool, got {:?}",
+                        cond_ty
+                    );
                 }
                 for stmt in &body.content {
                     self.check_stmt(stmt);
@@ -117,6 +144,33 @@ impl TypeChecker {
                     );
                 }
             }
+            Statement::Match { expr, arms } => {
+                let ty = self.infer_expr(expr);
+                match &ty {
+                    Type::Adt { name, .. } => {
+                        let variants = self
+                            .enums
+                            .get(name)
+                            .unwrap_or_else(|| panic!("Type error: undefined enum '{}'", name));
+                        // 先验证所有 pattern 有效
+                        for arm in arms.iter() {
+                            if !variants.contains_key(&arm.pattern) {
+                                panic!(
+                                    "Type error: enum '{}' has no variant '{}'",
+                                    name, arm.pattern
+                                );
+                            }
+                        }
+                    }
+                    _ => panic!("Type error: match requires enum, got {:?}", ty),
+                }
+                // 再检查各 arm 的 body（需要 mut borrow）
+                for arm in arms {
+                    for stmt in &arm.body.content {
+                        self.check_stmt(stmt);
+                    }
+                }
+            }
         }
     }
 
@@ -132,6 +186,17 @@ impl TypeChecker {
                 .variables
                 .get(name)
                 .cloned()
+                .or_else(|| {
+                    // 不是变量，检查是否是类型名（struct 或 enum）
+                    if self.enums.contains_key(name) || self.structs.contains_key(name) {
+                        Some(Type::Adt {
+                            name: name.clone(),
+                            args: vec![],
+                        })
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or_else(|| panic!("Type error: undefined variable '{}'", name)),
             Expression::Binary { left, op, right } => {
                 let lt = self.infer_expr(left);
@@ -176,14 +241,34 @@ impl TypeChecker {
                 }
                 Type::Bool
             }
-            Expression::StructLiteral { name, .. } => Type::Struct(name.clone()),
-            Expression::New { name, .. } => Type::Struct(name.clone()),
+            Expression::New { name, .. } => Type::Adt {
+                name: name.clone(),
+                args: vec![],
+            },
             Expression::FieldAccess { object, field } => {
                 let obj_ty = self.infer_expr(object);
-                match obj_ty {
-                    Type::Struct(_) => Type::I32, // 简化：字段类型未知，默认 i32
+                match &obj_ty {
+                    Type::Adt { name, .. } => {
+                        // 先查 struct 字段
+                        if let Some(fields) = self.structs.get(name) {
+                            return fields.get(field).cloned().unwrap_or_else(|| {
+                                panic!("Type error: struct '{}' has no field '{}'", name, field)
+                            });
+                        }
+                        // 再查 enum 变体
+                        if let Some(variants) = self.enums.get(name) {
+                            if !variants.contains_key(field) {
+                                panic!("Type error: enum '{}' has no variant '{}'", name, field);
+                            }
+                            return Type::Adt {
+                                name: name.clone(),
+                                args: vec![],
+                            };
+                        }
+                        panic!("Type error: undefined type '{}'", name);
+                    }
                     _ => panic!(
-                        "Type error: {:?} is not a struct，不能访问字段 '{}'",
+                        "Type error: {:?} is not a struct or enum，不能访问成员 '{}'",
                         obj_ty, field
                     ),
                 }
@@ -202,6 +287,37 @@ impl TypeChecker {
                     ),
                 }
             }
+            Expression::ArrayLiteral(elements) => {
+                if elements.is_empty() {
+                    panic!("Type error: empty array literal needs type annotation");
+                }
+                let elem_ty = self.infer_expr(&elements[0]);
+                for (i, elem) in elements.iter().enumerate().skip(1) {
+                    let ty = self.infer_expr(elem);
+                    if ty != elem_ty {
+                        panic!(
+                            "Type error: array element {} type {:?} doesn't match {:?}",
+                            i, ty, elem_ty
+                        );
+                    }
+                }
+                Type::Array(Box::new(elem_ty), elements.len())
+            }
+            Expression::Index { array, index } => {
+                let arr_ty = self.infer_expr(array);
+                let idx_ty = self.infer_expr(index);
+                if idx_ty != Type::I32 {
+                    panic!("Type error: array index must be i32, got {:?}", idx_ty);
+                }
+                match arr_ty {
+                    Type::Array(elem_ty, _) => *elem_ty,
+                    Type::Ptr(elem_ty) => *elem_ty,
+                    _ => panic!(
+                        "Type error: cannot index non-array/non-pointer type {:?}",
+                        arr_ty
+                    ),
+                }
+            }
             Expression::Call { name, args } => {
                 match name.as_str() {
                     "print" => {
@@ -209,9 +325,12 @@ impl TypeChecker {
                             panic!("Type error: print needs 1 arg(s)");
                         }
                         let arg_ty = self.infer_expr(&args[0]);
-                        if arg_ty != Type::I32 && arg_ty != Type::Bool {
+                        if arg_ty != Type::I32
+                            && arg_ty != Type::Bool
+                            && !matches!(arg_ty, Type::Adt { .. })
+                        {
                             panic!(
-                                "Type error: print arg must be i32 or bool, got {:?}",
+                                "Type error: print arg must be i32, bool or enum, got {:?}",
                                 arg_ty
                             );
                         }
@@ -245,11 +364,10 @@ impl TypeChecker {
                     }
                     _ => {
                         // 用户自定义函数
-                        let ret_ty = self
-                            .functions
-                            .get(name)
-                            .cloned()
-                            .unwrap_or_else(|| panic!("Type error: undefined function '{}'", name));
+                        let ret_ty =
+                            self.functions.get(name).cloned().unwrap_or_else(|| {
+                                panic!("Type error: undefined function '{}'", name)
+                            });
                         for arg in args {
                             self.infer_expr(arg);
                         }
@@ -260,4 +378,3 @@ impl TypeChecker {
         }
     }
 }
-
