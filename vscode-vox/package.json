@@ -1,0 +1,49 @@
+{
+    "name": "vox-language",
+    "displayName": "Vox Language Support",
+    "version": "0.1.0",
+    "publisher": "vox",
+    "icon": "icon.png",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:vox"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "vox",
+                "extensions": [
+                    ".vox"
+                ],
+                "aliases": [
+                    "Vox"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "vox",
+                "scopeName": "source.vox",
+                "path": "./syntaxes/vox.tmLanguage.json"
+            }
+        ]
+    },
+    "description": "",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "vscode-languageclient": "^10.1.0"
+    }
+}
