@@ -40,11 +40,17 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    int32_t sum = 0;
+    for (int32_t i = 0; (i < 10); i = (i + 1)) {
+        sum = (sum + i);
+        if ((i == 5)) {
+            continue;
+        }
+        if ((i == 8)) {
+            break;
+        }
+    }
+    print(sum);
     return 0;
 }
 

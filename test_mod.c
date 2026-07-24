@@ -35,16 +35,24 @@ int32_t puts(const char* s);
 int32_t getchar();
 void* fopen(const char* path, const char* mode);
 int32_t fclose(void* file);
-int32_t puts(const char* s);
+int32_t mul(int32_t a, int32_t b);
+int32_t add(int32_t a, int32_t b);
 int main();
 
 // === 函数定义 ===
+int32_t mul(int32_t a, int32_t b) {
+    return (a * b);
+}
+
+int32_t add(int32_t a, int32_t b) {
+    return (a + b);
+}
+
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    int32_t const x = add(10, 32);
+    int32_t const y = mul(6, 7);
+    print(x);
+    print(y);
     return 0;
 }
 

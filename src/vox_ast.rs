@@ -5,6 +5,23 @@ pub struct Program {
     pub structs: Vec<StructDef>,
     pub enums: Vec<EnumDef>,
     pub functions: Vec<Function>,
+    pub consts: Vec<ConstDef>,
+    pub statics: Vec<StaticDef>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstDef {
+    pub name: String,
+    pub type_annot: Type,
+    pub value: Expression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StaticDef {
+    pub name: String,
+    pub type_annot: Type,
+    pub value: Expression,
+    pub mutable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,6 +30,7 @@ pub struct Function {
     pub params: Vec<Param>,
     pub return_type: Type,
     pub body: Block,
+    pub is_extern: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,15 +40,34 @@ pub struct Param {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Signedness {
+    Signed,
+    Unsigned,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    I32,
-    Str,
+    Int(Signedness, u8),                    // Int(Signed, 32) = i32
+    Float(u8),                              // Float(64) = f64
     Bool,
+    Char,
+    Str,
     Void,
-    F64,
     Ptr(Box<Type>),                        // *i32 **i32
     Array(Box<Type>, usize),               // [i32; 10]
-    Adt { name: String, args: Vec<Type> }, // Point, Color, Vec<i32>
+    Adt { name: String, args: Vec<Type> }, // Point, Color
+}
+
+impl Type {
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Type::Int(_, _))
+    }
+    pub fn is_float(&self) -> bool {
+        matches!(self, Type::Float(_))
+    }
+    pub fn is_numeric(&self) -> bool {
+        self.is_integer() || self.is_float()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,10 +123,32 @@ pub enum Statement {
         name: String,
         value: Box<Expression>,
     },
+    Store {
+        ptr: Box<Expression>,
+        value: Box<Expression>,
+    },
+    StoreField {
+        object: Box<Expression>,
+        field: String,
+        value: Box<Expression>,
+    },
+    StoreIndex {
+        array: Box<Expression>,
+        index: Box<Expression>,
+        value: Box<Expression>,
+    },
     Match {
         expr: Box<Expression>,
         arms: Vec<MatchArm>,
     },
+    For {
+        init: Option<Box<Statement>>,
+        condition: Option<Box<Expression>>,
+        step: Option<Box<Statement>>,
+        body: Block,
+    },
+    Break,
+    Continue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,7 +159,7 @@ pub struct MatchArm {
 
 //第三层：表达式
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
     Add,
     Sub,
@@ -132,6 +191,10 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+    StructLiteral {
+        name: String,
+        fields: Vec<(String, Expression)>,
+    },
     // 字段/变体访问
     FieldAccess {
         object: Box<Expression>,
@@ -143,6 +206,11 @@ pub enum Expression {
         fields: Vec<(String, Expression)>,
     },
     AddrOf(Box<Expression>),
+    Cast {
+        expr: Box<Expression>,
+        target: Type,
+    },
+    Sizeof(Type),
     Deref(Box<Expression>),
     ArrayLiteral(Vec<Expression>),
     Index {

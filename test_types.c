@@ -40,10 +40,22 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
+    int8_t const a = 10;
+    int16_t const b = 200;
+    int32_t const c = 30000;
+    int64_t const d = 4000000;
+    uint8_t const e = 250;
+    uint16_t const f = 60000;
+    uint32_t const g = 4000000;
+    uint64_t const h = 9999999;
+    float const x = 3.14;
+    double const y = 2.718;
+    int8_t const ch = 65;
+    int const ok = 1;
+    int32_t arr[3] = { 1, 2, 3 };
     int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
+    int32_t* const added = (p + 1);
+    puts("All types OK!");
     print(42);
     return 0;
 }

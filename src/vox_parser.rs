@@ -138,66 +138,132 @@ impl Parser {
 
             TokenKind::Match => {
                 self.advance(); // 吞掉 match
-
                 let expr = self.parse_expr();
-
                 self.expect(TokenKind::LBrace);
                 self.advance();
-
                 let arms = self.parse_match_arms();
-
-                // parse_match_arms 已消费 }
-
                 Statement::Match {
                     expr: Box::new(expr),
                     arms,
                 }
             }
 
-            // 标识符开头：赋值 x = expr;  或 调用 print(args);
-            TokenKind::Identifier(_) => {
-                let name = match &self.current.kind {
-                    TokenKind::Identifier(s) => s.clone(),
-                    _ => unreachable!(),
+            TokenKind::For => {
+                self.advance(); // 吞掉 for
+                self.expect(TokenKind::LParen);
+                self.advance(); // 吞掉 (
+
+                // init（可选）：let 声明 或 表达式
+                let init = if self.current.kind == TokenKind::Semicolon {
+                    None
+                } else if self.current.kind == TokenKind::Let {
+                    let s = self.parse_stmt(); // Let 自带分号
+                    Some(Box::new(s))
+                } else {
+                    let e = self.parse_expr();
+                    // 表达式没有分号，需要手动吞掉
+                    self.expect(TokenKind::Semicolon);
+                    self.advance();
+                    Some(Box::new(Statement::Expr(Box::new(e))))
                 };
-                self.advance(); // 吞掉标识符
+
+                // condition（可选）
+                let condition = if self.current.kind == TokenKind::Semicolon {
+                    None
+                } else {
+                    let e = self.parse_expr();
+                    Some(Box::new(e))
+                };
+                self.expect(TokenKind::Semicolon);
+                self.advance(); // 吞掉 ;
+
+                // step（可选）：表达式或赋值
+                let step = if self.current.kind == TokenKind::RParen {
+                    None
+                } else {
+                    let expr = self.parse_expr();
+                    if self.current.kind == TokenKind::Eq {
+                        // i = i + 1 这种赋值
+                        self.advance(); // 吞掉 =
+                        let value = self.parse_expr();
+                        let name = match expr {
+                            Expression::Identifier(n) => n,
+                            _ => panic!(
+                                "Syntax error: line {}: cannot assign to this in for-step",
+                                self.current.line
+                            ),
+                        };
+                        Some(Box::new(Statement::Assign {
+                            name,
+                            value: Box::new(value),
+                        }))
+                    } else {
+                        Some(Box::new(Statement::Expr(Box::new(expr))))
+                    }
+                };
+                self.expect(TokenKind::RParen);
+                self.advance(); // 吞掉 )
+
+                // body
+                self.expect(TokenKind::LBrace);
+                self.advance();
+                let body = self.parse_block();
+
+                Statement::For {
+                    init,
+                    condition,
+                    step,
+                    body,
+                }
+            }
+
+            TokenKind::Break => {
+                self.advance();
+                self.expect(TokenKind::Semicolon);
+                self.advance();
+                Statement::Break
+            }
+
+            TokenKind::Continue => {
+                self.advance();
+                self.expect(TokenKind::Semicolon);
+                self.advance();
+                Statement::Continue
+            }
+
+            // 表达式开头：赋值 x = expr;  调用 print(args);  运算 a + b;
+            // 注：parse_expr 会处理标识符、*, !, & 等多种开头
+            _ => {
+                let expr = self.parse_expr();
 
                 if self.current.kind == TokenKind::Eq {
-                    // 赋值：x = expr;
+                    // x = expr  或  *p = expr
                     self.advance(); // 吞掉 =
                     let value = Box::new(self.parse_expr());
                     self.expect(TokenKind::Semicolon);
                     self.advance();
-                    Statement::Assign { name, value }
-                } else if self.current.kind == TokenKind::LParen {
-                    // 函数调用：print(args)
-                    self.advance(); // 吞掉 (
-                    let mut args = Vec::new();
-                    if self.current.kind != TokenKind::RParen {
-                        loop {
-                            args.push(self.parse_expr());
-                            if self.current.kind == TokenKind::Comma {
-                                self.advance();
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    self.expect(TokenKind::RParen);
-                    self.advance(); // 吞掉 )
-                    self.expect(TokenKind::Semicolon);
-                    self.advance();
-                    Statement::Expr(Box::new(Expression::Call { name, args }))
-                } else {
-                    panic!(
-                        "Syntax error: line {}: expected = or (, got {:?}",
-                        self.current.line, self.current.kind
-                    );
+
+                    return match expr {
+                        Expression::Identifier(name) => Statement::Assign { name, value },
+                        Expression::Deref(inner) => Statement::Store { ptr: inner, value },
+                        Expression::FieldAccess { object, field } => Statement::StoreField {
+                            object,
+                            field,
+                            value,
+                        },
+                        Expression::Index { array, index } => Statement::StoreIndex {
+                            array,
+                            index,
+                            value,
+                        },
+                        _ => panic!(
+                            "Syntax error: line {}: cannot assign to this expression",
+                            self.current.line
+                        ),
+                    };
                 }
-            }
-            _ => {
-                // 表达式语句：print(y);  add(1, 2);
-                let expr = self.parse_expr();
+
+                // 表达式语句：a + b;  print(x);  *p;
                 self.expect(TokenKind::Semicolon);
                 self.advance();
                 Statement::Expr(Box::new(expr))
@@ -233,25 +299,102 @@ impl Parser {
         }
 
         let ty = match &self.current.kind {
-            TokenKind::I32 => Type::I32,
-            TokenKind::Bool => Type::Bool,
-            TokenKind::Str => Type::Str,
-            TokenKind::Void => Type::Void,
-            TokenKind::F64 => Type::F64,
-            TokenKind::Identifier(name) => Type::Adt {
-                name: name.clone(),
-                args: vec![],
-            },
+            TokenKind::KwI8 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Signed, 8)
+            }
+            TokenKind::KwI16 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Signed, 16)
+            }
+            TokenKind::KwI32 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Signed, 32)
+            }
+            TokenKind::KwI64 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Signed, 64)
+            }
+            TokenKind::KwU8 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Unsigned, 8)
+            }
+            TokenKind::KwU16 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Unsigned, 16)
+            }
+            TokenKind::KwU32 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Unsigned, 32)
+            }
+            TokenKind::KwU64 => {
+                self.advance();
+                Type::Int(crate::vox_ast::Signedness::Unsigned, 64)
+            }
+            TokenKind::KwF32 => {
+                self.advance();
+                Type::Float(32)
+            }
+            TokenKind::KwF64 => {
+                self.advance();
+                Type::Float(64)
+            }
+            TokenKind::KwChar => {
+                self.advance();
+                Type::Char
+            }
+            TokenKind::KwBool => {
+                self.advance();
+                Type::Bool
+            }
+            TokenKind::KwStr => {
+                self.advance();
+                Type::Str
+            }
+            TokenKind::KwVoid => {
+                self.advance();
+                Type::Void
+            }
+            TokenKind::Identifier(name) => {
+                let name = name.clone();
+                self.advance(); // 吞掉标识符
+
+                // 类型参数：<i32, Str>
+                let args = if self.current.kind == TokenKind::Lt {
+                    self.advance(); // 吞掉 <
+                    let args = self.parse_type_args();
+                    self.expect(TokenKind::Gt);
+                    self.advance(); // 吞掉 >
+                    args
+                } else {
+                    vec![]
+                };
+
+                return Type::Adt { name, args };
+            }
             _ => panic!(
                 "Syntax error: line {}: expected type (i32/bool/str/void or struct name), got {:?}",
                 self.current.line, self.current.kind
             ),
         };
-        self.advance();
         ty
     }
 
     // ==================== 表达式解析 ====================
+
+    /// 解析类型参数列表：<i32, Str, *Point>
+    fn parse_type_args(&mut self) -> Vec<Type> {
+        let mut args = Vec::new();
+        loop {
+            args.push(self.parse_type());
+            if self.current.kind == TokenKind::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        args
+    }
 
     /// 入口：比较运算（最低优先级）
     pub fn parse_expr(&mut self) -> Expression {
@@ -336,6 +479,15 @@ impl Parser {
                 let inner = self.parse_postfix();
                 Expression::Not(Box::new(inner))
             }
+            TokenKind::Sizeof => {
+                self.advance(); // 吞掉 sizeof
+                self.expect(TokenKind::LParen);
+                self.advance(); // 吞掉 (
+                let ty = self.parse_type();
+                self.expect(TokenKind::RParen);
+                self.advance(); // 吞掉 )
+                Expression::Sizeof(ty)
+            }
             TokenKind::New => {
                 self.advance(); // 吞掉 new
                 let name = match &self.current.kind {
@@ -346,6 +498,15 @@ impl Parser {
                     ),
                 };
                 self.advance();
+
+                // 跳过 <T> 类型参数（保留语法，以后泛型用）
+                if self.current.kind == TokenKind::Lt {
+                    self.advance(); // 吞掉 <
+                    let _args = self.parse_type_args();
+                    self.expect(TokenKind::Gt);
+                    self.advance(); // 吞掉 >
+                }
+
                 self.expect(TokenKind::LBrace);
                 self.advance();
                 let mut fields = Vec::new();
@@ -417,6 +578,29 @@ impl Parser {
                     self.advance(); // 跳过 )
 
                     Expression::Call { name, args }
+                } else if self.current.kind == TokenKind::LBrace
+                    && name.chars().next().map_or(false, |c| c.is_uppercase())
+                {
+                    // 结构体字面量：Point { x: 10, y: 20 }（仅大写开头触发）
+                    self.advance();
+                    let mut fields = Vec::new();
+                    while self.current.kind != TokenKind::RBrace {
+                        let field_name = match &self.current.kind {
+                            TokenKind::Identifier(s) => s.clone(),
+                            _ => panic!("语法错误: 第{}行: 期望字段名", self.current.line),
+                        };
+                        self.advance();
+                        self.expect(TokenKind::Colon);
+                        self.advance();
+                        let value = self.parse_expr();
+                        fields.push((field_name, value));
+                        if self.current.kind == TokenKind::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenKind::RBrace);
+                    self.advance();
+                    Expression::StructLiteral { name, fields }
                 } else {
                     Expression::Identifier(name)
                 }
@@ -494,6 +678,13 @@ impl Parser {
                     array: Box::new(expr),
                     index: Box::new(index),
                 };
+            } else if self.current.kind == TokenKind::As {
+                self.advance();
+                let target = self.parse_type();
+                expr = Expression::Cast {
+                    expr: Box::new(expr),
+                    target,
+                };
             } else {
                 break;
             }
@@ -556,17 +747,25 @@ impl Parser {
         let mut functions = Vec::new();
         let mut structs = Vec::new();
         let mut enums = Vec::new();
+        let mut consts = Vec::new();
+        let mut statics = Vec::new();
 
         while self.current.kind != TokenKind::Eof {
             if self.current.kind == TokenKind::Fn {
-                functions.push(self.parse_function());
-            } else if self.current.kind == TokenKind::Struct {
+                functions.push(self.parse_function(false));
+            } else if self.current.kind == TokenKind::Extern {
+                functions.push(self.parse_function(true));
+            } else if self.current.kind == TokenKind::KwStruct {
                 structs.push(self.parse_struct_def());
-            } else if self.current.kind == TokenKind::Enum {
+            } else if self.current.kind == TokenKind::KwEnum {
                 enums.push(self.parse_enum_def());
+            } else if self.current.kind == TokenKind::Const {
+                consts.push(self.parse_const_def());
+            } else if self.current.kind == TokenKind::Static {
+                statics.push(self.parse_static_def());
             } else {
                 panic!(
-                    "Syntax error: line {}: expected fn, struct or enum, got {:?}",
+                    "Syntax error: line {}: expected fn/struct/enum/const/static, got {:?}",
                     self.current.line, self.current.kind
                 );
             }
@@ -576,11 +775,13 @@ impl Parser {
             functions,
             structs,
             enums,
+            consts,
+            statics,
         }
     }
 
     pub fn parse_struct_def(&mut self) -> StructDef {
-        self.expect(TokenKind::Struct);
+        self.expect(TokenKind::KwStruct);
         self.advance(); // 跳过 struct
 
         // 结构体名
@@ -627,7 +828,7 @@ impl Parser {
     }
 
     pub fn parse_enum_def(&mut self) -> EnumDef {
-        self.expect(TokenKind::Enum);
+        self.expect(TokenKind::KwEnum);
         self.advance(); // 跳过 enum
 
         // 枚举名
@@ -687,7 +888,85 @@ impl Parser {
         EnumDef { name, variants }
     }
 
-    pub fn parse_function(&mut self) -> Function {
+    pub fn parse_const_def(&mut self) -> crate::vox_ast::ConstDef {
+        self.expect(TokenKind::Const);
+        self.advance(); // 跳过 const
+
+        let name = match &self.current.kind {
+            TokenKind::Identifier(s) => s.clone(),
+            _ => panic!(
+                "Syntax error: line {}: expected const name",
+                self.current.line
+            ),
+        };
+        self.advance();
+
+        self.expect(TokenKind::Colon);
+        self.advance();
+
+        let type_annot = self.parse_type();
+
+        self.expect(TokenKind::Eq);
+        self.advance();
+
+        let value = self.parse_expr();
+
+        self.expect(TokenKind::Semicolon);
+        self.advance();
+
+        crate::vox_ast::ConstDef {
+            name,
+            type_annot,
+            value,
+        }
+    }
+
+    pub fn parse_static_def(&mut self) -> crate::vox_ast::StaticDef {
+        self.expect(TokenKind::Static);
+        self.advance(); // 跳过 static
+
+        let mutable = if self.current.kind == TokenKind::Mut {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        let name = match &self.current.kind {
+            TokenKind::Identifier(s) => s.clone(),
+            _ => panic!(
+                "Syntax error: line {}: expected static name",
+                self.current.line
+            ),
+        };
+        self.advance();
+
+        self.expect(TokenKind::Colon);
+        self.advance();
+
+        let type_annot = self.parse_type();
+
+        self.expect(TokenKind::Eq);
+        self.advance();
+
+        let value = self.parse_expr();
+
+        self.expect(TokenKind::Semicolon);
+        self.advance();
+
+        crate::vox_ast::StaticDef {
+            name,
+            type_annot,
+            value,
+            mutable,
+        }
+    }
+
+    pub fn parse_function(&mut self, is_extern: bool) -> Function {
+        if is_extern {
+            self.expect(TokenKind::Extern);
+            self.advance(); // 跳过 extern
+        }
         self.expect(TokenKind::Fn);
         self.advance(); // 跳过 fn
 
@@ -716,16 +995,23 @@ impl Parser {
             Type::Void
         };
 
-        // { 函数体 }
-        self.expect(TokenKind::LBrace);
-        self.advance();
-        let body = self.parse_block();
+        // extern 声明：分号结尾，无函数体
+        let body = if is_extern {
+            self.expect(TokenKind::Semicolon);
+            self.advance();
+            crate::vox_ast::Block { content: vec![] }
+        } else {
+            self.expect(TokenKind::LBrace);
+            self.advance();
+            self.parse_block()
+        };
 
         Function {
             name,
             params,
             return_type,
             body,
+            is_extern,
         }
     }
 

@@ -40,11 +40,14 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    uint64_t const a = sizeof(int32_t);
+    uint64_t const b = sizeof(double);
+    uint64_t const c = sizeof(int32_t*);
+    uint64_t const d = sizeof(int32_t[10]);
+    print(a);
+    print(b);
+    print(c);
+    print(d);
     return 0;
 }
 

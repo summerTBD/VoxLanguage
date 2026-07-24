@@ -1,3 +1,7 @@
+// === C 预处理指令 ===
+#define MAX_SIZE 1024
+#define GREET "hello from macro"
+
 #include <stdint.h>
 #include <gc.h>
 
@@ -40,11 +44,9 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    int32_t const x = MAX_SIZE;
+    print(x);
+    puts(GREET);
     return 0;
 }
 

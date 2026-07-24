@@ -30,21 +30,24 @@ static void print_str(const char* s) {
     printf("%s\n", s);
 }
 
+static const int32_t BUF = 1024;
+static const double PI = 3.14;
+static const const char* MSG = "hello vox";
+
+static int32_t COUNTER = 0;
+
 // === 函数声明 ===
 int32_t puts(const char* s);
 int32_t getchar();
 void* fopen(const char* path, const char* mode);
 int32_t fclose(void* file);
-int32_t puts(const char* s);
 int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    print(BUF);
+    COUNTER = (BUF + 1);
+    print(COUNTER);
     return 0;
 }
 

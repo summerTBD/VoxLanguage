@@ -30,6 +30,12 @@ static void print_str(const char* s) {
     printf("%s\n", s);
 }
 
+// === 结构体定义 ===
+struct Point {
+    int32_t x;
+    int32_t y;
+};
+
 // === 函数声明 ===
 int32_t puts(const char* s);
 int32_t getchar();
@@ -40,11 +46,12 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
-    puts(s);
-    print(42);
+    struct Point* p = GC_malloc(sizeof(struct Point));
+    p->x = 10;
+    p->y = 20;
+    print(p->x);
+    GC_free(p);
+    puts("done");
     return 0;
 }
 

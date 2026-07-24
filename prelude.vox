@@ -1,0 +1,10 @@
+// === Vox Prelude: C 标准函数声明 ===
+
+extern fn puts(s: str): i32;
+extern fn getchar(): i32;
+
+// 文件 I/O（*void 替代 FILE*）
+extern fn fopen(path: str, mode: str): *void;
+extern fn fclose(file: *void): i32;
+
+
