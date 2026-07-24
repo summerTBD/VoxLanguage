@@ -121,8 +121,8 @@ fn main() {
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
         .unwrap_or_else(|| Path::new(".").to_path_buf());
-    let gc_include = exe_dir.join("../vendor/gc/include");
-    let gc_lib = exe_dir.join("../vendor/gc/libgc.a");
+    let gc_include = exe_dir.join("vendor/include");
+    let gc_lib = exe_dir.join("vendor/libgc.a");
 
     println!("=== gcc compile ===");
     let mut gcc_args = vec![c_path.to_str().unwrap(), "-o", out_name.to_str().unwrap()];
