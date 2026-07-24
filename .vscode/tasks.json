@@ -1,0 +1,37 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Vox: Compile",
+            "type": "shell",
+            "command": "voxc",
+            "args": [
+                "${file}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Vox: Compile & Run",
+            "type": "shell",
+            "command": "voxc",
+            "args": [
+                "${file}",
+                "&&",
+                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        }
+    ]
+}

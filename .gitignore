@@ -1,4 +1,5 @@
 /target
+/bin
 vscode-vox/node_modules/
 vscode-vox/.vscode-test/
 *.vsix

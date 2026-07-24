@@ -116,17 +116,23 @@ fn main() {
     let c_path = input_path.with_extension("c");
     std::fs::write(&c_path, &c_code).expect("写入 C 文件失败");
 
-    // 4. gcc 编译（链接 Boehm GC）
+    // 4. gcc 编译（链接 Boehm GC，路径相对于 voxc.exe）
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| Path::new(".").to_path_buf());
+    let gc_include = exe_dir.join("../vendor/gc/include");
+    let gc_lib = exe_dir.join("../vendor/gc/libgc.a");
+
     println!("=== gcc compile ===");
+    let mut gcc_args = vec![c_path.to_str().unwrap(), "-o", out_name.to_str().unwrap()];
+    if !no_gc {
+        gcc_args.push("-I");
+        gcc_args.push(gc_include.to_str().unwrap());
+        gcc_args.push(gc_lib.to_str().unwrap());
+    }
     let status = Command::new("gcc")
-        .args(&[
-            c_path.to_str().unwrap(),
-            "-o",
-            out_name.to_str().unwrap(),
-            "-I",
-            r"E:\Dev_Evens\_BoehmGC\gc-8.2.12\include",
-            r"E:\Dev_Evens\_BoehmGC\gc-8.2.12\libgc.a",
-        ])
+        .args(&gcc_args)
         .status()
         .expect("调用 gcc 失败");
 
