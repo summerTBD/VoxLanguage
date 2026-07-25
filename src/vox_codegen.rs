@@ -125,10 +125,14 @@ impl Codegen {
             self.emit("");
         }
 
-        // 函数声明
+        // 函数声明（去重：prelude 中的 extern 优先）
         self.emit("// === 函数声明 ===");
+        let mut declared = std::collections::HashSet::new();
         for func in &program.functions {
-            self.emit_function_decl(func);
+            if !declared.contains(&func.name) {
+                self.emit_function_decl(func);
+                declared.insert(func.name.clone());
+            }
         }
         self.emit("");
 
@@ -238,6 +242,13 @@ impl Codegen {
     }
 
     fn compile_function(&mut self, func: &Function) {
+        // 指针参数加入 ptr_vars
+        for p in &func.params {
+            if matches!(p.type_annot, Type::Ptr(_)) {
+                self.ptr_vars.insert(p.name.clone());
+            }
+        }
+
         let ret = self.ret_type_to_c(func);
         let params: Vec<String> = func
             .params
@@ -310,6 +321,10 @@ impl Codegen {
                         self.emit(&format!("{}->{} = {};", name, f, val));
                     }
                 } else {
+                    // 指针声明显式追踪
+                    if matches!(type_annot, Type::Ptr(_)) {
+                        self.ptr_vars.insert(name.clone());
+                    }
                     let ty = self.type_to_c(type_annot);
                     let val = self.compile_expr(value);
                     if *mutable {
