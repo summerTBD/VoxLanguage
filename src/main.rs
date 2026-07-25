@@ -50,9 +50,13 @@ fn main() {
     let source = format!("{}\n{}", prelude, user_source);
 
     // 输出目录
-    let out_dir = out_dir
-        .map(PathBuf::from)
-        .unwrap_or_else(|| input_path.parent().unwrap_or(Path::new(".")).to_path_buf());
+    let out_dir = out_dir.map(PathBuf::from).unwrap_or_else(|| {
+        input_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."))
+    });
     std::fs::create_dir_all(&out_dir).expect("无法创建输出目录");
 
     let stem = input_path.file_stem().unwrap().to_str().unwrap();
@@ -115,7 +119,7 @@ fn main() {
 
     // 运行
     println!("\n=== Run {} ===", exe_path.display());
-    let run = Command::new(exe_path.to_str().unwrap())
+    let run = Command::new(format!(".\\{}", exe_path.display()))
         .output()
         .expect("运行失败");
     print!("{}", String::from_utf8_lossy(&run.stdout));

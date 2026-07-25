@@ -1,14 +1,4 @@
-fn noop() {
-    return;
-}
-
 fn main() {
-    noop();                    // return; 测试
-
-    let arr: [i32; 4] = [1, 2, 3, 4];
-    let p: *i32 = &arr[0];
-    let q: *i32 = p + 2;       // *i32 + i32 → *i32
-    printf("*q = %d\n", *q);
-
-    printf("10 %% 3 = %d\n", 10 % 3);
+    let a : i32 = 1;
+    printf("%d", a);
 }

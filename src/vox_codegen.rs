@@ -59,6 +59,7 @@ impl Codegen {
 
         // 头文件
         self.emit("#include <stdint.h>");
+        self.emit("#include <inttypes.h>");
         if self.use_gc {
             self.emit("#include <gc.h>");
         }
