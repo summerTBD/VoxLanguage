@@ -29,8 +29,14 @@ fn expand_mods_impl(source: &str, base_dir: &Path, visited: &mut HashSet<String>
                 continue;
             }
             visited.insert(canonical);
-            let mod_src = std::fs::read_to_string(&mod_path)
-                .unwrap_or_else(|_| panic!("无法读取模块: {}", mod_path.display()));
+            let mod_src = match std::fs::read_to_string(&mod_path) {
+                Ok(s) => s,
+                Err(_) => {
+                    // 文件不存在（LSP 下模块可能尚未创建），跳过
+                    eprintln!("警告: mod 文件不存在: {}", mod_path.display());
+                    continue;
+                }
+            };
             let mod_dir = mod_path.parent().unwrap_or(base_dir);
             result.push_str(&expand_mods_impl(&mod_src, mod_dir, visited));
             result.push('\n');

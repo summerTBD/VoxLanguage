@@ -7,10 +7,10 @@ function activate(ctx) {
     const realDir = fs.realpathSync(ctx.extensionPath);
     const exe = process.platform === "win32" ? "voxlsp.exe" : "voxlsp";
 
-    // 优先级：release（稳定） > debug > PATH
+    // 优先级：debug（开发时无锁） > release > PATH
     const candidates = [
-        path.join(realDir, "..", "target", "release", exe),
         path.join(realDir, "..", "target", "debug", exe),
+        path.join(realDir, "..", "target", "release", exe),
         exe,
     ];
     const serverPath = candidates.find(p => fs.existsSync(p)) || candidates[2];
