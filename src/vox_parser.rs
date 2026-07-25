@@ -764,6 +764,17 @@ impl Parser {
                 consts.push(self.parse_const_def());
             } else if self.current.kind == TokenKind::Static {
                 statics.push(self.parse_static_def());
+            } else if self.current.kind == TokenKind::Mod {
+                // mod "file.vox"; — 预处理器已展开，解析时安全跳过
+                self.advance(); // 跳过 mod
+                while self.current.kind != TokenKind::Semicolon
+                    && self.current.kind != TokenKind::Eof
+                {
+                    self.advance();
+                }
+                if self.current.kind == TokenKind::Semicolon {
+                    self.advance();
+                }
             } else {
                 panic!(
                     "Syntax error: line {}: expected fn/struct/enum/const/static, got {:?}",

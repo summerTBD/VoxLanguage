@@ -24,6 +24,7 @@ pub enum TokenKind {
     Continue,
     Const,
     Static,
+    Mod,
 
     // --- 类型关键字 ---
     KwI8,

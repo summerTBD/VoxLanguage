@@ -365,6 +365,7 @@ impl Lexer {
             "continue" => TokenKind::Continue,
             "const" => TokenKind::Const,
             "static" => TokenKind::Static,
+            "mod" => TokenKind::Mod,
             // 类型关键字
             "i8" => TokenKind::KwI8,
             "i16" => TokenKind::KwI16,
