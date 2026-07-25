@@ -11,10 +11,13 @@ fn main() {
 
     // 解析参数
     let mut no_gc = false;
+    let mut check_only = false;
     let mut input_file: Option<&str> = None;
     for arg in &args[1..] {
         if arg == "--no-gc" {
             no_gc = true;
+        } else if arg == "--check" {
+            check_only = true;
         } else {
             input_file = Some(arg);
         }
@@ -63,6 +66,11 @@ fn main() {
     let mut typeck = TypeChecker::new();
     typeck.register_defines(&define_names);
     typeck.check(&program);
+
+    if check_only {
+        std::process::exit(0);
+    }
+
     println!("=== Type check OK ===");
 
     // 4. AST → C 代码

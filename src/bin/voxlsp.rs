@@ -1,12 +1,8 @@
 // Vox Language Server (LSP) — JSON-RPC over stdin/stdout
+// 调 voxc --check 做检查，保证和编译器 100% 一致
 
 use lsp_server::{Connection, Message};
 use lsp_types::*;
-use std::panic::catch_unwind;
-use vox_language::{
-    expand_mods, extract_cpp_directives, vox_lexer::Lexer, vox_parser::Parser,
-    vox_typeck::TypeChecker,
-};
 
 fn main() {
     eprintln!("Vox LSP 启动");
@@ -76,56 +72,48 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
         .ok();
 }
 
-fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
-    // === 与 main.rs 完全一致的处理流程 ===
+fn check(source: &str, _base_dir: &std::path::Path) -> Vec<Diagnostic> {
+    let tmp = std::env::temp_dir().join(format!("vox_lsp_{}.vox", std::process::id()));
+    std::fs::write(&tmp, source).ok();
 
-    // 1. 展开 mod 指令
-    let source = expand_mods(source, base_dir);
+    let exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("vox-language.exe")))
+        .unwrap_or_else(|| std::path::Path::new("vox-language.exe").to_path_buf());
 
-    // 2. 提取 C 宏 + 文本替换 #define 名称
-    let (_cpp_directives, define_names, source) = extract_cpp_directives(&source);
+    let output = std::process::Command::new(&exe)
+        .arg(&tmp)
+        .arg("--check")
+        .output();
 
-    // 3. 移除 # 行
-    let source: String = source
+    let _ = std::fs::remove_file(&tmp);
+
+    match output {
+        Ok(o) if o.status.success() => vec![],
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            parse_diagnostics(&stderr)
+        }
+        Err(_) => vec![],
+    }
+}
+
+fn parse_diagnostics(stderr: &str) -> Vec<Diagnostic> {
+    stderr
         .lines()
-        .filter(|l| !l.trim_start().starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    // 4. 拼接 prelude
-    let prelude = include_str!("../../prelude.vox");
-    let prelude_lines = prelude.lines().count() as u32;
-    let full_source = format!("{}\n{}", prelude, source);
-
-    // 5. Lex → Parse → TypeCheck
-    match catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let lexer = Lexer::new(&full_source);
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program();
-        let mut typeck = TypeChecker::new();
-        typeck.register_defines(&define_names);
-        typeck.check(&program);
-    })) {
-        Ok(()) => vec![],
-        Err(e) => {
-            let msg = e
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_default();
-            let (line, col, msg) = parse_loc(&msg);
-            let line = line.saturating_sub(prelude_lines);
-            vec![Diagnostic {
+        .filter_map(|line| {
+            let (line_num, col, msg) = parse_loc(line);
+            Some(Diagnostic {
                 range: Range {
-                    start: Position::new(line.saturating_sub(1), col.saturating_sub(1)),
-                    end: Position::new(line.saturating_sub(1), col + 30),
+                    start: Position::new(line_num.saturating_sub(1), col.saturating_sub(1)),
+                    end: Position::new(line_num.saturating_sub(1), col + 30),
                 },
                 severity: Some(DiagnosticSeverity::ERROR),
                 message: msg,
                 ..Default::default()
-            }]
-        }
-    }
+            })
+        })
+        .collect()
 }
 
 fn parse_loc(msg: &str) -> (u32, u32, String) {
