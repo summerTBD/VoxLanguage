@@ -72,8 +72,9 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
         .ok();
 }
 
-fn check(source: &str, _base_dir: &std::path::Path) -> Vec<Diagnostic> {
-    let tmp = std::env::temp_dir().join(format!("vox_lsp_{}.vox", std::process::id()));
+fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
+    // 写到原文件同目录，保证 mod 相对路径正确
+    let tmp = base_dir.join(format!("_vox_lsp_{}.vox", std::process::id()));
     std::fs::write(&tmp, source).ok();
 
     let exe = std::env::current_exe()

@@ -16,7 +16,6 @@ void free(void* ptr);
 void noop();
 int main();
 
-// === 函数定义 ===
 void noop() {
     return;
     return;

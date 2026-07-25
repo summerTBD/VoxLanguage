@@ -805,12 +805,7 @@ impl Parser {
     // ==================== 函数与程序解析 ====================
 
     pub fn parse_program(&mut self) -> Program {
-        let mut functions = Vec::new();
-        let mut structs = Vec::new();
-        let mut enums = Vec::new();
-        let mut consts = Vec::new();
-        let mut statics = Vec::new();
-        let mut cpp_lines = Vec::new();
+        let mut items = Vec::new();
 
         while self.current.kind != TokenKind::Eof {
             // 顶层 C 预处理指令
@@ -830,23 +825,30 @@ impl Parser {
                     | TokenKind::MacroLine(_)
             ) {
                 let d = self.format_cpp_directive();
-                cpp_lines.push(d);
+                items.push(crate::vox_ast::TopLevelItem::CppLine(d));
                 self.advance();
             } else if self.current.kind == TokenKind::Fn {
-                functions.push(self.parse_function(false));
+                items.push(crate::vox_ast::TopLevelItem::Function(
+                    self.parse_function(false),
+                ));
             } else if self.current.kind == TokenKind::Extern {
-                functions.push(self.parse_function(true));
+                items.push(crate::vox_ast::TopLevelItem::Function(
+                    self.parse_function(true),
+                ));
             } else if self.current.kind == TokenKind::KwStruct {
-                structs.push(self.parse_struct_def());
+                items.push(crate::vox_ast::TopLevelItem::Struct(
+                    self.parse_struct_def(),
+                ));
             } else if self.current.kind == TokenKind::KwEnum {
-                enums.push(self.parse_enum_def());
+                items.push(crate::vox_ast::TopLevelItem::Enum(self.parse_enum_def()));
             } else if self.current.kind == TokenKind::Const {
-                consts.push(self.parse_const_def());
+                items.push(crate::vox_ast::TopLevelItem::Const(self.parse_const_def()));
             } else if self.current.kind == TokenKind::Static {
-                statics.push(self.parse_static_def());
+                items.push(crate::vox_ast::TopLevelItem::Static(
+                    self.parse_static_def(),
+                ));
             } else if self.current.kind == TokenKind::Mod {
-                // mod "file.vox"; — 预处理器已展开，解析时安全跳过
-                self.advance(); // 跳过 mod
+                self.advance();
                 while self.current.kind != TokenKind::Semicolon
                     && self.current.kind != TokenKind::Eof
                 {
@@ -863,14 +865,7 @@ impl Parser {
             }
         }
 
-        Program {
-            cpp_lines,
-            functions,
-            structs,
-            enums,
-            consts,
-            statics,
-        }
+        Program { items }
     }
 
     pub fn parse_struct_def(&mut self) -> StructDef {

@@ -51,17 +51,10 @@ impl Codegen {
     /// 编译整个程序，返回 C 源码
     pub fn compile(mut self, program: &Program) -> String {
         // 收集枚举名
-        for e in &program.enums {
-            self.enum_names.insert(e.name.clone());
-        }
-
-        // 顶层 C 预处理指令（#include / #define 等）—— 原位输出
-        for line in &program.cpp_lines {
-            self.output.push_str(line);
-            self.output.push('\n');
-        }
-        if !program.cpp_lines.is_empty() {
-            self.output.push('\n');
+        for i in &program.items {
+            if let crate::vox_ast::TopLevelItem::Enum(e) = i {
+                self.enum_names.insert(e.name.clone());
+            }
         }
 
         // 头文件
@@ -70,73 +63,56 @@ impl Codegen {
             self.emit("#include <gc.h>");
         }
         self.emit("");
-        // 非 GC 模式
         if !self.use_gc {
             self.emit("// === 非 GC 模式 ===");
             self.emit("#include <stdlib.h>");
             self.emit("");
         }
-        // 运行时内部依赖的 C 函数（不暴露给 Vox 用户）
         self.emit("// === C 运行时依赖 ===");
         self.emit("extern int printf(const char* fmt, ...);");
         self.emit("extern int scanf(const char* fmt, ...);");
         self.emit("extern int puts(const char* s);");
         self.emit("");
 
-        // struct 定义
-        if !program.structs.is_empty() {
-            self.emit("// === 结构体定义 ===");
-            for s in &program.structs {
-                self.compile_struct_def(s);
-            }
-            self.emit("");
-        }
-
-        // enum 定义
-        if !program.enums.is_empty() {
-            self.emit("// === 枚举定义 ===");
-            for e in &program.enums {
-                self.compile_enum_def(e);
-            }
-            self.emit("");
-        }
-
-        // const 定义
-        for c in &program.consts {
-            let ty = self.type_to_c(&c.type_annot);
-            let val = self.compile_expr(&c.value);
-            self.emit(&format!("static const {} {} = {};", ty, c.name, val));
-        }
-        if !program.consts.is_empty() {
-            self.emit("");
-        }
-
-        // static 定义
-        for s in &program.statics {
-            let ty = self.type_to_c(&s.type_annot);
-            let val = self.compile_expr(&s.value);
-            self.emit(&format!("static {} {} = {};", ty, s.name, val));
-        }
-        if !program.statics.is_empty() {
-            self.emit("");
-        }
-
-        // 函数声明（去重：prelude 中的 extern 优先）
+        // 函数声明（去重）
         self.emit("// === 函数声明 ===");
         let mut declared = std::collections::HashSet::new();
-        for func in &program.functions {
-            if !declared.contains(&func.name) {
-                self.emit_function_decl(func);
-                declared.insert(func.name.clone());
+        for f in program.functions() {
+            if !declared.contains(&f.name) {
+                self.emit_function_decl(f);
+                declared.insert(f.name.clone());
             }
         }
         self.emit("");
 
-        // 函数定义（跳过 extern）
-        self.emit("// === 函数定义 ===");
-        for func in &program.functions {
-            if !func.is_extern {
-                self.compile_function(func);
+        // 按原始顺序输出所有顶层元素
+        for item in &program.items {
+            match item {
+                crate::vox_ast::TopLevelItem::CppLine(line) => {
+                    self.output.push_str(line);
+                    self.output.push('\n');
+                }
+                crate::vox_ast::TopLevelItem::Struct(s) => {
+                    self.compile_struct_def(s);
+                }
+                crate::vox_ast::TopLevelItem::Enum(e) => {
+                    self.compile_enum_def(e);
+                }
+                crate::vox_ast::TopLevelItem::Const(c) => {
+                    let ty = self.type_to_c(&c.type_annot);
+                    let val = self.compile_expr(&c.value);
+                    self.emit(&format!("static const {} {} = {};", ty, c.name, val));
+                }
+                crate::vox_ast::TopLevelItem::Static(s) => {
+                    let ty = self.type_to_c(&s.type_annot);
+                    let val = self.compile_expr(&s.value);
+                    self.emit(&format!("static {} {} = {};", ty, s.name, val));
+                }
+                crate::vox_ast::TopLevelItem::Function(func) => {
+                    if !func.is_extern {
+                        self.compile_function(func);
+                    }
+                }
             }
         }
 

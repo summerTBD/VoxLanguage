@@ -53,7 +53,7 @@ impl TypeChecker {
     /// 检查整个程序
     pub fn check(&mut self, program: &Program) {
         // 第一遍：注册所有结构体字段
-        for s in &program.structs {
+        for s in program.structs() {
             let mut fields = HashMap::new();
             for f in &s.fields {
                 fields.insert(f.name.clone(), f.type_annot.clone());
@@ -62,15 +62,13 @@ impl TypeChecker {
         }
 
         // 第二遍：注册所有函数签名
-        for func in &program.functions {
+        for func in program.functions() {
             self.functions
                 .insert(func.name.clone(), func.return_type.clone());
         }
 
         // 第三遍：注册所有枚举变体
-
-        // 第三遍：注册所有枚举变体
-        for e in &program.enums {
+        for e in program.enums() {
             let mut variants = HashMap::new();
             for v in &e.variants {
                 variants.insert(v.name.clone(), v.discriminant);
@@ -79,7 +77,7 @@ impl TypeChecker {
         }
 
         // 第四遍：验证 const/static 并注册为全局
-        for c in &program.consts {
+        for c in program.consts() {
             let actual = self.infer_expr(&c.value);
             if actual != c.type_annot
                 && !(c.type_annot.is_integer() && actual.is_integer())
@@ -92,7 +90,7 @@ impl TypeChecker {
             }
             self.globals.insert(c.name.clone(), c.type_annot.clone());
         }
-        for s in &program.statics {
+        for s in program.statics() {
             let actual = self.infer_expr(&s.value);
             if actual != s.type_annot
                 && !(s.type_annot.is_integer() && actual.is_integer())
@@ -107,7 +105,7 @@ impl TypeChecker {
         }
 
         // 第五遍：检查每个函数体（跳过 extern）
-        for func in &program.functions {
+        for func in program.functions() {
             if !func.is_extern {
                 self.check_function(func);
             }

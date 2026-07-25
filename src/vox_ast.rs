@@ -1,13 +1,36 @@
 //第一层：程序结构
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TopLevelItem {
+    CppLine(String),
+    Struct(StructDef),
+    Enum(EnumDef),
+    Function(Function),
+    Const(ConstDef),
+    Static(StaticDef),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub cpp_lines: Vec<String>,
-    pub structs: Vec<StructDef>,
-    pub enums: Vec<EnumDef>,
-    pub functions: Vec<Function>,
-    pub consts: Vec<ConstDef>,
-    pub statics: Vec<StaticDef>,
+    pub items: Vec<TopLevelItem>,
+}
+
+impl Program {
+    pub fn functions(&self) -> Vec<&Function> {
+        self.items.iter().filter_map(|i| if let TopLevelItem::Function(f) = i { Some(f) } else { None }).collect()
+    }
+    pub fn structs(&self) -> Vec<&StructDef> {
+        self.items.iter().filter_map(|i| if let TopLevelItem::Struct(s) = i { Some(s) } else { None }).collect()
+    }
+    pub fn enums(&self) -> Vec<&EnumDef> {
+        self.items.iter().filter_map(|i| if let TopLevelItem::Enum(e) = i { Some(e) } else { None }).collect()
+    }
+    pub fn consts(&self) -> Vec<&ConstDef> {
+        self.items.iter().filter_map(|i| if let TopLevelItem::Const(c) = i { Some(c) } else { None }).collect()
+    }
+    pub fn statics(&self) -> Vec<&StaticDef> {
+        self.items.iter().filter_map(|i| if let TopLevelItem::Static(s) = i { Some(s) } else { None }).collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
