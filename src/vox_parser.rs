@@ -420,9 +420,51 @@ impl Parser {
         args
     }
 
-    /// 入口：比较运算（最低优先级）
+    /// 入口：逻辑或（最低优先级）
     pub fn parse_expr(&mut self) -> Expression {
-        self.parse_comparison()
+        self.parse_logical_or()
+    }
+
+    /// ||
+    fn parse_logical_or(&mut self) -> Expression {
+        let mut left = self.parse_logical_and();
+
+        loop {
+            let op = match self.current.kind {
+                TokenKind::PipePipe => BinOp::Or,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_logical_and();
+            left = Expression::Binary {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
+        }
+
+        left
+    }
+
+    /// &&
+    fn parse_logical_and(&mut self) -> Expression {
+        let mut left = self.parse_comparison();
+
+        loop {
+            let op = match self.current.kind {
+                TokenKind::AndAnd => BinOp::And,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_comparison();
+            left = Expression::Binary {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
+        }
+
+        left
     }
 
     /// == != < > <= >=

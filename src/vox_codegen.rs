@@ -68,6 +68,23 @@ impl Codegen {
         }
         self.emit("");
 
+        // 先输出 CppLine + struct/enum 定义（函数声明可能用到这些类型）
+        for item in &program.items {
+            match item {
+                crate::vox_ast::TopLevelItem::CppLine(line) => {
+                    self.output.push_str(line);
+                    self.output.push('\n');
+                }
+                crate::vox_ast::TopLevelItem::Struct(s) => {
+                    self.compile_struct_def(s);
+                }
+                crate::vox_ast::TopLevelItem::Enum(e) => {
+                    self.compile_enum_def(e);
+                }
+                _ => {}
+            }
+        }
+
         // 函数声明（去重），跳过 extern 函数（由标准头文件提供）
         self.emit("// === 函数声明 ===");
         let mut declared = std::collections::HashSet::new();
@@ -82,18 +99,13 @@ impl Codegen {
         }
         self.emit("");
 
-        // 按原始顺序输出所有顶层元素
+        // 按原始顺序输出 const / static / 函数实现
         for item in &program.items {
             match item {
-                crate::vox_ast::TopLevelItem::CppLine(line) => {
-                    self.output.push_str(line);
-                    self.output.push('\n');
-                }
-                crate::vox_ast::TopLevelItem::Struct(s) => {
-                    self.compile_struct_def(s);
-                }
-                crate::vox_ast::TopLevelItem::Enum(e) => {
-                    self.compile_enum_def(e);
+                crate::vox_ast::TopLevelItem::CppLine(_)
+                | crate::vox_ast::TopLevelItem::Struct(_)
+                | crate::vox_ast::TopLevelItem::Enum(_) => {
+                    // 已在上面输出，跳过
                 }
                 crate::vox_ast::TopLevelItem::Const(c) => {
                     let ty = self.type_to_c(&c.type_annot);
@@ -523,12 +535,11 @@ impl Codegen {
                     }
                     return format!("{}.{}", obj, field);
                 }
-                // 链式访问（sb->inner.len）：非标识符对象大概率是指针，用 ->
+                // 链式访问：非标识符对象大概率是指针，用 ->
+                // 但 Deref 已解引用，用 .
                 let use_arrow = matches!(
                     object.as_ref(),
-                    Expression::FieldAccess { .. }
-                        | Expression::Deref(..)
-                        | Expression::Index { .. }
+                    Expression::FieldAccess { .. } | Expression::Index { .. }
                 );
                 if use_arrow {
                     format!("{}->{}", obj, field)

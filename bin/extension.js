@@ -2,7 +2,7 @@ const { LanguageClient } = require("vscode-languageclient/node");
 const path = require("path");
 
 function activate(ctx) {
-    const server = path.join(__dirname, "voxlsp.exe");
+    const server = path.join(__dirname, "voxlsp2.exe");
     const client = new LanguageClient(
         "vox-lsp", "Vox Language Server",
         { command: server },
