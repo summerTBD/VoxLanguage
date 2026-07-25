@@ -122,15 +122,21 @@ fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
 fn parse_diagnostics(stderr: &str) -> Vec<Diagnostic> {
     stderr
         .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with("note:"))
         .filter_map(|line| {
             let (line_num, col, msg) = parse_loc(line);
+            let message = if msg.is_empty() {
+                "Vox error".to_string()
+            } else {
+                msg
+            };
             Some(Diagnostic {
                 range: Range {
                     start: Position::new(line_num.saturating_sub(1), col.saturating_sub(1)),
                     end: Position::new(line_num.saturating_sub(1), col + 30),
                 },
                 severity: Some(DiagnosticSeverity::ERROR),
-                message: msg,
+                message,
                 ..Default::default()
             })
         })
