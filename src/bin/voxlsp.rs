@@ -63,8 +63,12 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 }
 
 fn check(source: &str) -> Vec<Diagnostic> {
+    let prelude = include_str!("../../prelude.vox");
+    let prelude_lines = prelude.lines().count() as u32;
+    let full_source = format!("{}\n{}", prelude, source);
+
     match catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let lexer = Lexer::new(source);
+        let lexer = Lexer::new(&full_source);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         let mut typeck = TypeChecker::new();
@@ -78,6 +82,8 @@ fn check(source: &str) -> Vec<Diagnostic> {
                 .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_default();
             let (line, col, msg) = parse_loc(&msg);
+            // 减去 prelude 的行数偏移
+            let line = line.saturating_sub(prelude_lines);
             vec![Diagnostic {
                 range: Range {
                     start: Position::new(line.saturating_sub(1), col.saturating_sub(1)),

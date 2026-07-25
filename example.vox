@@ -1,5 +1,3 @@
-extern fn puts(s: str): i32;
-
 fn main() {
     // void* → *i8（遍历字符串时需要）
     let s: str = "hello";
