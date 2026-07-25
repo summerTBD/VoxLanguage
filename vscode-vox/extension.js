@@ -9,8 +9,8 @@ function activate(ctx) {
 
     // 优先级：debug（开发时无锁） > release > PATH
     const candidates = [
-        path.join(realDir, "..", "target", "debug", exe),
         path.join(realDir, "..", "target", "release", exe),
+        path.join(realDir, "..", "target", "debug", exe),
         exe,
     ];
     const serverPath = candidates.find(p => fs.existsSync(p)) || candidates[2];
