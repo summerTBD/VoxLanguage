@@ -3,7 +3,10 @@
 use lsp_server::{Connection, Message};
 use lsp_types::*;
 use std::panic::catch_unwind;
-use vox_language::{vox_lexer::Lexer, vox_parser::Parser, vox_typeck::TypeChecker};
+use vox_language::{
+    expand_mods, extract_cpp_directives, vox_lexer::Lexer, vox_parser::Parser,
+    vox_typeck::TypeChecker,
+};
 
 fn main() {
     eprintln!("Vox LSP 启动");
@@ -74,35 +77,27 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 }
 
 fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
-    // 展开 mod 指令
-    let source = vox_language::expand_mods(source, base_dir);
+    // === 与 main.rs 完全一致的处理流程 ===
 
-    // 过滤 # 行并替换 #define 名称
-    let mut define_names: Vec<(String, String)> = Vec::new();
-    let mut expanded = source.to_string();
-    for line in source.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("#define ") {
-            let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-            if parts.len() == 2 {
-                let name = parts[0];
-                let value = parts[1].trim();
-                expanded = replace_ident(&expanded, name, value);
-                define_names.push((name.into(), value.into()));
-            }
-        }
-    }
-    // 移除所有 # 行
-    let clean_source: String = expanded
+    // 1. 展开 mod 指令
+    let source = expand_mods(source, base_dir);
+
+    // 2. 提取 C 宏 + 文本替换 #define 名称
+    let (_cpp_directives, define_names, source) = extract_cpp_directives(&source);
+
+    // 3. 移除 # 行
+    let source: String = source
         .lines()
         .filter(|l| !l.trim_start().starts_with('#'))
         .collect::<Vec<_>>()
         .join("\n");
 
+    // 4. 拼接 prelude
     let prelude = include_str!("../../prelude.vox");
     let prelude_lines = prelude.lines().count() as u32;
-    let full_source = format!("{}\n{}", prelude, clean_source);
+    let full_source = format!("{}\n{}", prelude, source);
 
+    // 5. Lex → Parse → TypeCheck
     match catch_unwind(std::panic::AssertUnwindSafe(|| {
         let lexer = Lexer::new(&full_source);
         let mut parser = Parser::new(lexer);
@@ -119,7 +114,6 @@ fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
                 .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_default();
             let (line, col, msg) = parse_loc(&msg);
-            // 减去 prelude 的行数偏移
             let line = line.saturating_sub(prelude_lines);
             vec![Diagnostic {
                 range: Range {
@@ -152,29 +146,4 @@ fn parse_loc(msg: &str) -> (u32, u32, String) {
         }
     }
     (1, 1, msg.into())
-}
-
-fn replace_ident(source: &str, name: &str, value: &str) -> String {
-    let mut result = String::with_capacity(source.len());
-    let bytes = source.as_bytes();
-    let name_bytes = name.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if i + name_bytes.len() <= bytes.len()
-            && &bytes[i..i + name_bytes.len()] == name_bytes
-            && (i == 0 || !is_ident_char(bytes[i - 1]))
-            && (i + name_bytes.len() == bytes.len() || !is_ident_char(bytes[i + name_bytes.len()]))
-        {
-            result.push_str(value);
-            i += name_bytes.len();
-        } else {
-            result.push(bytes[i] as char);
-            i += 1;
-        }
-    }
-    result
-}
-
-fn is_ident_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
 }
