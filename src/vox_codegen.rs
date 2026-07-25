@@ -35,11 +35,19 @@ impl Codegen {
     }
 
     fn alloc_fn(&self) -> &str {
-        if self.use_gc { "GC_malloc" } else { "malloc" }
+        if self.use_gc {
+            "GC_malloc"
+        } else {
+            "malloc"
+        }
     }
 
     fn free_fn(&self) -> &str {
-        if self.use_gc { "GC_free" } else { "free" }
+        if self.use_gc {
+            "GC_free"
+        } else {
+            "free"
+        }
     }
 
     /// 编译整个程序，返回 C 源码
@@ -72,43 +80,11 @@ impl Codegen {
             self.emit("#include <stdlib.h>");
             self.emit("");
         }
-        // 自行声明 C 标准函数（避免 stdio.h 的 FILE 类型冲突）
-        self.emit("// === C 标准函数声明 ===");
+        // 运行时内部依赖的 C 函数（不暴露给 Vox 用户）
+        self.emit("// === C 运行时依赖 ===");
         self.emit("extern int printf(const char* fmt, ...);");
         self.emit("extern int scanf(const char* fmt, ...);");
         self.emit("extern int puts(const char* s);");
-        self.emit("extern int getchar(void);");
-        self.emit("extern void* fopen(const char* path, const char* mode);");
-        self.emit("extern int fclose(void* file);");
-        self.emit("extern int fprintf(void* file, const char* fmt, ...);");
-        self.emit("");
-        self.emit("// === Vox 运行时 ===");
-        self.emit("static int32_t print(int32_t x) {");
-        self.indent();
-        self.emit("printf(\"%d\\n\", x);");
-        self.emit("return 0;");
-        self.dedent();
-        self.emit("}");
-        self.emit("");
-        self.emit("static int32_t read_i32() {");
-        self.indent();
-        self.emit("int32_t x;");
-        self.emit("scanf(\"%d\", &x);");
-        self.emit("return x;");
-        self.dedent();
-        self.emit("}");
-        self.emit("");
-        self.emit("static void print_f64(double x) {");
-        self.indent();
-        self.emit("printf(\"%f\\n\", x);");
-        self.dedent();
-        self.emit("}");
-        self.emit("");
-        self.emit("static void print_str(const char* s) {");
-        self.indent();
-        self.emit("printf(\"%s\\n\", s);");
-        self.dedent();
-        self.emit("}");
         self.emit("");
 
         // struct 定义
@@ -324,7 +300,10 @@ impl Codegen {
                     self.ptr_vars.insert(name.clone()); // new → 指针
                     self.emit(&format!(
                         "struct {}* {} = {}(sizeof(struct {}));",
-                        struct_name, name, self.alloc_fn(), struct_name
+                        struct_name,
+                        name,
+                        self.alloc_fn(),
+                        struct_name
                     ));
                     for (f, v) in fields {
                         let val = self.compile_expr(v);
@@ -444,7 +423,10 @@ impl Codegen {
                     }
                     None => String::new(),
                 };
-                self.emit(&format!("for ({}; {}; {}) {{", init_str, cond_str, step_str));
+                self.emit(&format!(
+                    "for ({}; {}; {}) {{",
+                    init_str, cond_str, step_str
+                ));
                 self.indent();
                 for stmt in &body.content {
                     self.compile_stmt(stmt);
@@ -528,7 +510,10 @@ impl Codegen {
                 let tmp = self.fresh_tmp();
                 self.emit(&format!(
                     "struct {}* {} = {}(sizeof(struct {}));",
-                    name, tmp, self.alloc_fn(), name
+                    name,
+                    tmp,
+                    self.alloc_fn(),
+                    name
                 ));
                 for (f, v) in fields {
                     let val = self.compile_expr(v);

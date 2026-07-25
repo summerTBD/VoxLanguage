@@ -497,51 +497,6 @@ impl TypeChecker {
             }
             Expression::Call { name, args } => {
                 match name.as_str() {
-                    "print" => {
-                        if args.len() != 1 {
-                            panic!("Type error: print needs 1 arg(s)");
-                        }
-                        let arg_ty = self.infer_expr(&args[0]);
-                        if !arg_ty.is_integer()
-                            && arg_ty != Type::Bool
-                            && !matches!(arg_ty, Type::Adt { .. })
-                        {
-                            panic!(
-                                "Type error: print arg must be integer, bool or enum, got {:?}",
-                                arg_ty
-                            );
-                        }
-                        Type::Void
-                    }
-                    "print_str" => {
-                        if args.len() != 1 {
-                            panic!("Type error: print_str needs 1 arg(s)");
-                        }
-                        let arg_ty = self.infer_expr(&args[0]);
-                        if arg_ty != Type::Str {
-                            panic!("Type error: print_str arg must be str, got {:?}", arg_ty);
-                        }
-                        Type::Void
-                    }
-                    "print_f64" => {
-                        if args.len() != 1 {
-                            panic!("Type error: print_f64 needs 1 arg(s)");
-                        }
-                        let arg_ty = self.infer_expr(&args[0]);
-                        if !arg_ty.is_float() {
-                            panic!(
-                                "Type error: print_f64 arg must be float type, got {:?}",
-                                arg_ty
-                            );
-                        }
-                        Type::Void
-                    }
-                    "read_i32" => {
-                        if !args.is_empty() {
-                            panic!("Type error: read_i32 takes no args");
-                        }
-                        Type::Int(Signedness::Signed, 32)
-                    }
                     "free" => {
                         if args.len() != 1 {
                             panic!("Type error: free needs 1 arg(s)");
@@ -551,6 +506,28 @@ impl TypeChecker {
                             panic!("Type error: free arg must be a pointer, got {:?}", arg_ty);
                         }
                         Type::Void
+                    }
+                    "printf" => {
+                        // 变参，只检查第一个参数是 str
+                        if args.is_empty() {
+                            panic!("Type error: printf needs at least 1 arg");
+                        }
+                        let arg_ty = self.infer_expr(&args[0]);
+                        if arg_ty != Type::Str {
+                            panic!("Type error: printf fmt must be str, got {:?}", arg_ty);
+                        }
+                        // 其余参数不检查（变参透传）
+                        Type::Int(Signedness::Signed, 32)
+                    }
+                    "scanf" => {
+                        if args.is_empty() {
+                            panic!("Type error: scanf needs at least 1 arg");
+                        }
+                        let arg_ty = self.infer_expr(&args[0]);
+                        if arg_ty != Type::Str {
+                            panic!("Type error: scanf fmt must be str, got {:?}", arg_ty);
+                        }
+                        Type::Int(Signedness::Signed, 32)
                     }
                     _ => {
                         // 用户自定义函数

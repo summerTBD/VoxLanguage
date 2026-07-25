@@ -1,49 +1,25 @@
 #include <stdint.h>
 #include <gc.h>
 
-// === C 标准函数声明 ===
+// === C 运行时依赖 ===
 extern int printf(const char* fmt, ...);
 extern int scanf(const char* fmt, ...);
 extern int puts(const char* s);
-extern int getchar(void);
-extern void* fopen(const char* path, const char* mode);
-extern int fclose(void* file);
-extern int fprintf(void* file, const char* fmt, ...);
-
-// === Vox 运行时 ===
-static int32_t print(int32_t x) {
-    printf("%d\n", x);
-    return 0;
-}
-
-static int32_t read_i32() {
-    int32_t x;
-    scanf("%d", &x);
-    return x;
-}
-
-static void print_f64(double x) {
-    printf("%f\n", x);
-}
-
-static void print_str(const char* s) {
-    printf("%s\n", s);
-}
 
 // === 函数声明 ===
 int32_t puts(const char* s);
 int32_t getchar();
 void* fopen(const char* path, const char* mode);
 int32_t fclose(void* file);
+void* malloc(uint64_t size);
+void free(void* ptr);
 int main();
 
 // === 函数定义 ===
 int main() {
     const char* const s = "hello";
-    int32_t* const p = ((int32_t*)42);
-    int32_t* const q = (p + 1);
     puts(s);
-    print(42);
+    printf("pow: %d\n", (2 * 2));
     return 0;
 }
 

@@ -280,18 +280,11 @@ impl Lexer {
                     break;
                 }
                 Some('\\') => {
+                    s.push('\\');
                     self.advance(); // 跳过反斜杠
-                    match self.advance() {
-                        Some('n') => s.push('\n'),
-                        Some('t') => s.push('\t'),
-                        Some('\\') => s.push('\\'),
-                        Some('"') => s.push('"'),
-                        Some(c) => {
-                            // 不识别的转义，原样保留
-                            s.push('\\');
-                            s.push(c);
-                        }
-                        None => panic!("Lex error: incomplete escape sequence"),
+                    if let Some(c) = self.peek() {
+                        s.push(c);
+                        self.advance();
                     }
                 }
                 Some(ch) => {

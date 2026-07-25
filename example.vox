@@ -1,9 +1,5 @@
 fn main() {
-    // void* → *i8（遍历字符串时需要）
     let s: str = "hello";
-    let p: *i32 = 42 as *i32;
-    let q: *i32 = p + 1;
-
     puts(s);
-    print(42);
+    printf("pow: %d\n", 2 * 2);
 }

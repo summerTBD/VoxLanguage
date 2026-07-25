@@ -1,10 +1,15 @@
 // === Vox Prelude: C 标准函数声明 ===
 
+// 注意：printf / scanf 由编译器内置处理，不需在此声明
+
 extern fn puts(s: str): i32;
 extern fn getchar(): i32;
 
-// 文件 I/O（*void 替代 FILE*）
+// 文件 I/O
 extern fn fopen(path: str, mode: str): *void;
 extern fn fclose(file: *void): i32;
 
+// 内存
+extern fn malloc(size: u64): *void;
+extern fn free(ptr: *void): void;
 
