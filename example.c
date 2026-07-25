@@ -13,19 +13,22 @@ void* fopen(const char* path, const char* mode);
 int32_t fclose(void* file);
 void* malloc(uint64_t size);
 void free(void* ptr);
+void noop();
 int main();
 
 // === 函数定义 ===
+void noop() {
+    return;
+    return;
+}
+
 int main() {
-    int32_t const m = (10 % 3);
-    printf("10 %% 3 = %d\n", m);
-    int8_t const a = 10;
-    int16_t const b = 200;
-    int32_t const c = (a + b);
-    printf("i8 + i16 = %d\n", c);
-    if ((a < b)) {
-        puts("a < b");
-    }
+    noop();
+    int32_t arr[4] = { 1, 2, 3, 4 };
+    int32_t* const p = (&arr[0]);
+    int32_t* const q = (p + 2);
+    printf("*q = %d\n", (*q));
+    printf("10 %% 3 = %d\n", (10 % 3));
     return 0;
 }
 

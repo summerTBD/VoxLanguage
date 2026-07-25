@@ -87,11 +87,15 @@ impl Parser {
             }
             TokenKind::Return => {
                 self.advance(); // 吞掉 return
-                let value = self.parse_expr();
-                self.expect(TokenKind::Semicolon);
-                self.advance();
-
-                Statement::Return(Some(Box::new(value)))
+                if self.current.kind == TokenKind::Semicolon {
+                    self.advance(); // 吞掉 ;
+                    Statement::Return(None)
+                } else {
+                    let value = self.parse_expr();
+                    self.expect(TokenKind::Semicolon);
+                    self.advance();
+                    Statement::Return(Some(Box::new(value)))
+                }
             }
             TokenKind::If => {
                 self.advance(); // 吞掉 if

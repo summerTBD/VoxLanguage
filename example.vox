@@ -1,16 +1,14 @@
+fn noop() {
+    return;
+}
+
 fn main() {
-    // % 取模
-    let m: i32 = 10 % 3;
-    printf("10 %% 3 = %d\n", m);
+    noop();                    // return; 测试
 
-    // 跨宽度运算
-    let a: i8 = 10;
-    let b: i16 = 200;
-    let c: i32 = a + b;
-    printf("i8 + i16 = %d\n", c);
+    let arr: [i32; 4] = [1, 2, 3, 4];
+    let p: *i32 = &arr[0];
+    let q: *i32 = p + 2;       // *i32 + i32 → *i32
+    printf("*q = %d\n", *q);
 
-    // 跨宽度比较
-    if a < b {
-        puts("a < b");
-    }
+    printf("10 %% 3 = %d\n", 10 % 3);
 }
