@@ -1,5 +1,16 @@
 fn main() {
-    let s: str = "hello";
-    puts(s);
-    printf("pow: %d\n", 2 * 2);
+    // % 取模
+    let m: i32 = 10 % 3;
+    printf("10 %% 3 = %d\n", m);
+
+    // 跨宽度运算
+    let a: i8 = 10;
+    let b: i16 = 200;
+    let c: i32 = a + b;
+    printf("i8 + i16 = %d\n", c);
+
+    // 跨宽度比较
+    if a < b {
+        puts("a < b");
+    }
 }

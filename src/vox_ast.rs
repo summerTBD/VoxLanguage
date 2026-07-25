@@ -47,8 +47,8 @@ pub enum Signedness {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Int(Signedness, u8),                    // Int(Signed, 32) = i32
-    Float(u8),                              // Float(64) = f64
+    Int(Signedness, u8), // Int(Signed, 32) = i32
+    Float(u8),           // Float(64) = f64
     Bool,
     Char,
     Str,
@@ -67,6 +67,21 @@ impl Type {
     }
     pub fn is_numeric(&self) -> bool {
         self.is_integer() || self.is_float()
+    }
+    /// 返回两类型中"更宽"的那个（整数按位宽，有符号<无符号）
+    pub fn wider(&self, other: &Type) -> Type {
+        match (self, other) {
+            (Type::Int(s1, b1), Type::Int(s2, b2)) => {
+                let bits = (*b1).max(*b2);
+                let sign = match (s1, s2) {
+                    (Signedness::Unsigned, _) | (_, Signedness::Unsigned) => Signedness::Unsigned,
+                    _ => Signedness::Signed,
+                };
+                Type::Int(sign, bits)
+            }
+            (Type::Float(b1), Type::Float(b2)) => Type::Float((*b1).max(*b2)),
+            _ => self.clone(),
+        }
     }
 }
 
@@ -165,6 +180,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Mod,
     Eq,
     NotEq,
     Lt,

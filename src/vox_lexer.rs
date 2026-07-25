@@ -192,6 +192,10 @@ impl Lexer {
                     self.advance();
                     TokenKind::Slash
                 }
+                '%' => {
+                    self.advance();
+                    TokenKind::Percent
+                }
                 '!' => {
                     self.advance();
                     if self.match_char('=') {

@@ -449,7 +449,7 @@ impl Parser {
         left
     }
 
-    /// * /
+    /// * / %
     fn parse_multiplication(&mut self) -> Expression {
         let mut left = self.parse_postfix();
 
@@ -457,6 +457,7 @@ impl Parser {
             let op = match self.current.kind {
                 TokenKind::Star => BinOp::Mul,
                 TokenKind::Slash => BinOp::Div,
+                TokenKind::Percent => BinOp::Mod,
                 _ => break,
             };
             self.advance();

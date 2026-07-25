@@ -17,9 +17,15 @@ int main();
 
 // === 函数定义 ===
 int main() {
-    const char* const s = "hello";
-    puts(s);
-    printf("pow: %d\n", (2 * 2));
+    int32_t const m = (10 % 3);
+    printf("10 %% 3 = %d\n", m);
+    int8_t const a = 10;
+    int16_t const b = 200;
+    int32_t const c = (a + b);
+    printf("i8 + i16 = %d\n", c);
+    if ((a < b)) {
+        puts("a < b");
+    }
     return 0;
 }
 

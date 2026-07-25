@@ -147,14 +147,10 @@ impl TypeChecker {
                 ..
             } => {
                 let actual = self.infer_expr(value);
-                // 字面量允许隐式同族转换（程序员亲手写的值，自己负责）
-                let is_literal = matches!(
-                    value.as_ref(),
-                    Expression::IntLiteral(_) | Expression::FloatLiteral(_)
-                );
+                // 同族允许（字面量或表达式均可）
                 let ok = actual == *type_annot
-                    || (is_literal && type_annot.is_integer() && actual.is_integer())
-                    || (is_literal && type_annot.is_float() && actual.is_float());
+                    || (type_annot.is_integer() && actual.is_integer())
+                    || (type_annot.is_float() && actual.is_float());
                 if !ok {
                     panic!(
                         "Type error: var '{}' declared {:?} but init is {:?}",
@@ -243,13 +239,9 @@ impl TypeChecker {
                     .get(name)
                     .unwrap_or_else(|| panic!("Type error: undefined variable '{}'", name));
                 let actual = self.infer_expr(value);
-                let is_literal = matches!(
-                    value.as_ref(),
-                    Expression::IntLiteral(_) | Expression::FloatLiteral(_)
-                );
                 let ok = actual == *expected
-                    || (is_literal && expected.is_integer() && actual.is_integer())
-                    || (is_literal && expected.is_float() && actual.is_float());
+                    || (expected.is_integer() && actual.is_integer())
+                    || (expected.is_float() && actual.is_float());
                 if !ok {
                     panic!(
                         "Type error: var '{}' is {:?}, cannot assign {:?}",
@@ -356,42 +348,59 @@ impl TypeChecker {
                         if matches!(&lt, Type::Ptr(_)) && rt.is_integer() {
                             return lt;
                         }
-                        // 普通算术：必须同类型数值
-                        if !lt.is_numeric() || !rt.is_numeric() || lt != rt {
-                            panic!(
-                                "Type error: arithmetic needs same numeric type, got {:?} and {:?}",
-                                lt, rt
-                            );
+                        // 同族数值均可（i8+i32, f32+f64 等）
+                        if lt.is_integer() && rt.is_integer() {
+                            return lt.wider(&rt);
                         }
-                        lt
-                    }
-                    // 乘除只支持数值
-                    BinOp::Mul | BinOp::Div => {
-                        if !lt.is_numeric() || !rt.is_numeric() || lt != rt {
-                            panic!(
-                                "Type error: mul/div needs same numeric type, got {:?} and {:?}",
-                                lt, rt
-                            );
+                        if lt.is_float() && rt.is_float() {
+                            return lt.wider(&rt);
                         }
-                        lt
+                        if lt.is_numeric() && lt == rt {
+                            return lt;
+                        }
+                        panic!(
+                            "Type error: arithmetic needs same kind, got {:?} and {:?}",
+                            lt, rt
+                        );
                     }
-                    // 比较：两边同类型，或指针跟整数比较（null 检查）
+                    // 乘除取模
+                    BinOp::Mul | BinOp::Div | BinOp::Mod => {
+                        if lt.is_integer() && rt.is_integer() {
+                            return lt.wider(&rt);
+                        }
+                        if lt.is_float() && rt.is_float() {
+                            return lt.wider(&rt);
+                        }
+                        if lt.is_numeric() && lt == rt {
+                            return lt;
+                        }
+                        panic!(
+                            "Type error: mul/div/mod needs same kind, got {:?} and {:?}",
+                            lt, rt
+                        );
+                    }
+                    // 比较
                     BinOp::Eq
                     | BinOp::NotEq
                     | BinOp::Lt
                     | BinOp::Gt
                     | BinOp::LtEq
                     | BinOp::GtEq => {
-                        // 指针 == 整数 或 指针 == 指针（null 检查）
+                        // 指针 == 整数（null 检查）
                         if (matches!(&lt, Type::Ptr(_)) && rt.is_integer())
                             || (lt.is_integer() && matches!(&rt, Type::Ptr(_)))
                         {
                             return Type::Bool;
                         }
-                        if lt != rt {
-                            panic!("Type error: comparison types differ: {:?} vs {:?}", lt, rt);
+                        // 同族可比较
+                        if lt == rt
+                            || (lt.is_integer() && rt.is_integer())
+                            || (lt.is_float() && rt.is_float())
+                            || (matches!(&lt, Type::Ptr(_)) && matches!(&rt, Type::Ptr(_)))
+                        {
+                            return Type::Bool;
                         }
-                        Type::Bool
+                        panic!("Type error: comparison types differ: {:?} vs {:?}", lt, rt);
                     }
                     // 逻辑：两边必须 bool，返回 bool
                     BinOp::And | BinOp::Or => {
