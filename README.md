@@ -39,9 +39,11 @@ fn main() {
 ```
 
 ```powershell
-voxc hello.vox    # → hello.exe
-voxc hello.vox --no-gc   # 不用 GC
-./hello.exe       # → hello world
+voxc hello.vox                  # → hello.c + hello.exe（同目录）
+voxc hello.vox --out build      # → build/hello.c + build/hello.exe
+voxc hello.vox --no-gc          # 不用 GC
+voxc hello.vox --check          # 只检查，不编译
+./hello.exe                     # → hello world
 ```
 
 ## Types

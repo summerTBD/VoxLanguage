@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use vox_language::{
@@ -11,15 +11,22 @@ fn main() {
     // 解析参数
     let mut no_gc = false;
     let mut check_only = false;
+    let mut out_dir: Option<String> = None;
     let mut input_file: Option<&str> = None;
-    for arg in &args[1..] {
-        if arg == "--no-gc" {
-            no_gc = true;
-        } else if arg == "--check" {
-            check_only = true;
-        } else {
-            input_file = Some(arg);
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--no-gc" => no_gc = true,
+            "--check" => check_only = true,
+            "--out" => {
+                i += 1;
+                if i < args.len() {
+                    out_dir = Some(args[i].clone());
+                }
+            }
+            _ => input_file = Some(&args[i]),
         }
+        i += 1;
     }
 
     let input_path = match input_file {
@@ -42,8 +49,15 @@ fn main() {
     let prelude = include_str!("../prelude.vox");
     let source = format!("{}\n{}", prelude, user_source);
 
-    // 推导输出文件名：example.vox → example.exe
-    let out_name = input_path.with_extension("exe");
+    // 输出目录
+    let out_dir = out_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(|| input_path.parent().unwrap_or(Path::new(".")).to_path_buf());
+    std::fs::create_dir_all(&out_dir).expect("无法创建输出目录");
+
+    let stem = input_path.file_stem().unwrap().to_str().unwrap();
+    let c_path = out_dir.join(format!("{}.c", stem));
+    let exe_path = out_dir.join(format!("{}.exe", stem));
 
     // 1. 词法分析 → 语法分析
     let lexer = Lexer::new(&source);
@@ -69,13 +83,11 @@ fn main() {
     // 4. AST → C 代码
     let codegen = Codegen::new(!no_gc);
     let c_code = codegen.compile(&program);
-    println!("\n=== Generated C code ===\n{}", c_code);
 
-    // 3. 写入 C 文件
-    let c_path = input_path.with_extension("c");
+    // 写入 C 文件
     std::fs::write(&c_path, &c_code).expect("写入 C 文件失败");
 
-    // 4. gcc 编译（链接 Boehm GC，路径相对于 voxc.exe）
+    // gcc 编译
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -84,7 +96,7 @@ fn main() {
     let gc_lib = exe_dir.join("vendor/libgc.a");
 
     println!("=== gcc compile ===");
-    let mut gcc_args = vec![c_path.to_str().unwrap(), "-o", out_name.to_str().unwrap()];
+    let mut gcc_args = vec![c_path.to_str().unwrap(), "-o", exe_path.to_str().unwrap()];
     if !no_gc {
         gcc_args.push("-I");
         gcc_args.push(gc_include.to_str().unwrap());
@@ -99,11 +111,11 @@ fn main() {
         eprintln!("compile failed!");
         return;
     }
-    println!("compile OK -> {}", out_name.display());
+    println!("compile OK -> {}", exe_path.display());
 
-    // 5. 运行
-    println!("\n=== Run {} ===", out_name.display());
-    let run = Command::new(format!(".\\{}", out_name.display()))
+    // 运行
+    println!("\n=== Run {} ===", exe_path.display());
+    let run = Command::new(exe_path.to_str().unwrap())
         .output()
         .expect("运行失败");
     print!("{}", String::from_utf8_lossy(&run.stdout));

@@ -1,5 +1,9 @@
 /target
-/bin
-vscode-vox/node_modules/
-vscode-vox/.vscode-test/
+/target_new
+/t[0-9]*
+/bin/voxc.exe
+/bin/voxlsp.exe
+/bin/node_modules/
 *.vsix
+out/
+*_vox_lsp_*.vox
