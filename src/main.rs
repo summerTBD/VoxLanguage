@@ -57,44 +57,6 @@ fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-/// 预处理器：展开 mod "file.vox"; 指令（支持嵌套，自动去重）
-fn expand_mods(source: &str, base_dir: &Path) -> String {
-    expand_mods_impl(source, base_dir, &mut std::collections::HashSet::new())
-}
-
-fn expand_mods_impl(
-    source: &str,
-    base_dir: &Path,
-    visited: &mut std::collections::HashSet<String>,
-) -> String {
-    let mut result = String::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("mod \"") && trimmed.ends_with("\";") {
-            let path = &trimmed[5..trimmed.len() - 2];
-            let mod_path = base_dir.join(path);
-            let canonical = mod_path
-                .canonicalize()
-                .unwrap_or_else(|_| mod_path.clone())
-                .to_string_lossy()
-                .to_string();
-            if visited.contains(&canonical) {
-                continue; // 已展开过，跳过
-            }
-            visited.insert(canonical);
-            let mod_src = std::fs::read_to_string(&mod_path)
-                .unwrap_or_else(|_| panic!("无法读取模块: {}", mod_path.display()));
-            let mod_dir = mod_path.parent().unwrap_or(base_dir);
-            result.push_str(&expand_mods_impl(&mod_src, mod_dir, visited));
-            result.push('\n');
-        } else {
-            result.push_str(line);
-            result.push('\n');
-        }
-    }
-    result
-}
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -120,7 +82,7 @@ fn main() {
 
     // 预处理器：展开所有 mod 指令
     let base_dir = input_path.parent().unwrap_or(Path::new("."));
-    let user_source = expand_mods(&user_source, base_dir);
+    let user_source = vox_language::expand_mods(&user_source, base_dir);
 
     // 预处理器：提取 C 宏 + 文本替换 #define 名称
     let (cpp_directives, define_names, user_source) = extract_cpp_directives(&user_source);

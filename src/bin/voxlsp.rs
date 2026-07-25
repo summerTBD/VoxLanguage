@@ -48,7 +48,18 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
         _ => return,
     };
 
-    let diags = check(&text);
+    let base_dir = {
+        let s = uri.as_str();
+        // file:///D:/path/file.vox → D:/path/
+        if let Some(path) = s.strip_prefix("file:///") {
+            let path = path.rsplit_once('/').map(|(d, _)| d).unwrap_or(".");
+            std::path::Path::new(path).to_path_buf()
+        } else {
+            std::path::Path::new(".").to_path_buf()
+        }
+    };
+
+    let diags = check(&text, &base_dir);
     let params = PublishDiagnosticsParams {
         uri: uri.clone(),
         diagnostics: diags,
@@ -62,7 +73,10 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
         .ok();
 }
 
-fn check(source: &str) -> Vec<Diagnostic> {
+fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
+    // 展开 mod 指令
+    let source = vox_language::expand_mods(source, base_dir);
+
     // 过滤 # 行并替换 #define 名称
     let mut define_names: Vec<(String, String)> = Vec::new();
     let mut expanded = source.to_string();
