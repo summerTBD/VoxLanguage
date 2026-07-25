@@ -1,7 +1,0 @@
-mod "a.vox";
-mod "b.vox";
-
-fn main() {
-    hello_a();
-    hello_b();
-}

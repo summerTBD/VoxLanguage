@@ -202,25 +202,30 @@ voxc app.vox                  # GC 模式
 voxc --no-gc app.vox          # 裸指针
 ```
 
-## Compiler Architecture
+## Compiler Pipeline
 
 ```
 .vox 文件
   │
-  ├─ mod 预处理器（展开 mod "..." + 提取 #define）
-  ├─ prelude 注入
+  ├─ expand_mods（mod "file.vox" 展开 + #define 文本替换）
+  ├─ prelude 注入（puts, fopen 等 C 函数声明）
   ▼
 Lexer → Tokens → Parser → AST → TypeChecker → Codegen → .c → gcc → .exe
 ```
 
+Token 层：`printf`/`scanf` 作为整段透传 token（不解析参数），支持 C 宏字符串拼接。
+`#define`/`#ifndef` 等 12 个 C 预处理指令作为一等关键字。
+
+## Source Files
+
 ```
 src/
-├── main.rs          # 入口，参数解析，gcc 调用
-├── bin/voxlsp.rs    # LSP 语言服务器
-├── lib.rs           # 模块声明
-├── vox_ast.rs       # AST 定义（类型/表达式/语句/程序）
+├── main.rs          # 入口，参数解析（--no-gc, --out, --check），gcc 调用
+├── bin/voxlsp.rs    # LSP 语言服务器（调 voxc --check，零差异）
+├── lib.rs           # 共享函数（expand_mods, replace_defines, replace_ident）
+├── vox_ast.rs       # AST 定义（Type, Expression, Statement, Program）
 ├── vox_lexer.rs     # 词法分析（Token 流）
-├── vox_parser.rs    # 语法分析（Token → AST）
+├── vox_parser.rs    # 语法分析（递归下降）
 ├── vox_token.rs     # Token 类型定义
 ├── vox_typeck.rs    # 类型检查
 └── vox_codegen.rs   # AST → C 代码生成
