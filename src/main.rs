@@ -2,8 +2,7 @@ use std::path::Path;
 use std::process::Command;
 
 use vox_language::{
-    extract_cpp_directives, vox_codegen::Codegen, vox_lexer::Lexer, vox_parser::Parser,
-    vox_typeck::TypeChecker,
+    vox_codegen::Codegen, vox_lexer::Lexer, vox_parser::Parser, vox_typeck::TypeChecker,
 };
 
 fn main() {
@@ -36,14 +35,8 @@ fn main() {
     let base_dir = input_path.parent().unwrap_or(Path::new("."));
     let user_source = vox_language::expand_mods(&user_source, base_dir);
 
-    // 预处理器：提取 C 宏 + 文本替换 #define 名称
-    let (cpp_directives, define_names, user_source) = extract_cpp_directives(&user_source);
-    // 移除 # 行（已提取到 directives，宏名已替换为值）
-    let user_source: String = user_source
-        .lines()
-        .filter(|l| !l.trim_start().starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n");
+    // 预处理器：文本替换 #define 名称（其余 # 由 lexer/parser 处理）
+    let (define_names, user_source) = vox_language::replace_defines(&user_source);
 
     // 拼接 prelude（C 标准函数声明） + 用户源码
     let prelude = include_str!("../prelude.vox");
@@ -74,7 +67,7 @@ fn main() {
     println!("=== Type check OK ===");
 
     // 4. AST → C 代码
-    let codegen = Codegen::new(!no_gc, cpp_directives);
+    let codegen = Codegen::new(!no_gc);
     let c_code = codegen.compile(&program);
     println!("\n=== Generated C code ===\n{}", c_code);
 

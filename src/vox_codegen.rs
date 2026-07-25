@@ -12,11 +12,10 @@ pub struct Codegen {
     enum_names: HashSet<String>,
     ptr_vars: HashSet<String>,
     use_gc: bool,
-    cpp_directives: String,
 }
 
 impl Codegen {
-    pub fn new(use_gc: bool, cpp_directives: String) -> Self {
+    pub fn new(use_gc: bool) -> Self {
         Codegen {
             output: String::new(),
             indent_level: 0,
@@ -24,7 +23,6 @@ impl Codegen {
             enum_names: HashSet::new(),
             ptr_vars: HashSet::new(),
             use_gc,
-            cpp_directives,
         }
     }
 
@@ -57,15 +55,13 @@ impl Codegen {
             self.enum_names.insert(e.name.clone());
         }
 
-        // C 预处理指令（#define / #include）—— 透传到 C 代码最顶部
-        if !self.cpp_directives.is_empty() {
-            self.emit("// === C 预处理指令 ===");
-            let dirs = std::mem::take(&mut self.cpp_directives);
-            for line in dirs.lines() {
-                self.output.push_str(line);
-                self.output.push('\n');
-            }
-            self.emit("");
+        // 顶层 C 预处理指令（#include / #define 等）—— 原位输出
+        for line in &program.cpp_lines {
+            self.output.push_str(line);
+            self.output.push('\n');
+        }
+        if !program.cpp_lines.is_empty() {
+            self.output.push('\n');
         }
 
         // 头文件
@@ -454,6 +450,12 @@ impl Codegen {
             }
             Statement::Continue => {
                 self.emit("continue;");
+            }
+            Statement::Define { name, value } => {
+                self.emit(&format!("#define {} {}", name, value));
+            }
+            Statement::CppDirective { directive } => {
+                self.emit(directive);
             }
             Statement::If {
                 condition,

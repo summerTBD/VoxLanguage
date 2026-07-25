@@ -233,6 +233,9 @@ impl TypeChecker {
                     panic!("Type error: continue outside loop");
                 }
             }
+            Statement::Define { .. } | Statement::CppDirective { .. } => {
+                // C 预处理指令，跳过类型检查
+            }
             Statement::Assign { name, value } => {
                 let expected = self
                     .variables

@@ -83,6 +83,20 @@ pub enum TokenKind {
 
     // --- 其他 ---
     Eof,
+
+    // --- C 预处理指令 ---
+    MacroDefine(String, String), // #define NAME value
+    MacroUndef(String),          // #undef NAME
+    MacroInclude(String),        // #include "path" / <path>
+    MacroIfdef(String),          // #ifdef NAME
+    MacroIfndef(String),         // #ifndef NAME
+    MacroIf(String),             // #if condition
+    MacroElse,                   // #else
+    MacroElif(String),           // #elif condition
+    MacroEndif,                  // #endif
+    MacroPragma(String),         // #pragma ...
+    MacroError(String),          // #error msg
+    MacroLine(String),           // #line N ["file"]
 }
 
 /// 源码中的一个 Token，携带位置信息

@@ -36,6 +36,26 @@ impl Parser {
     }
 
     pub fn parse_stmt(&mut self) -> Statement {
+        // C 预处理指令
+        if matches!(
+            &self.current.kind,
+            TokenKind::MacroDefine(..)
+                | TokenKind::MacroUndef(_)
+                | TokenKind::MacroInclude(_)
+                | TokenKind::MacroIfdef(_)
+                | TokenKind::MacroIfndef(_)
+                | TokenKind::MacroIf(_)
+                | TokenKind::MacroElse
+                | TokenKind::MacroElif(_)
+                | TokenKind::MacroEndif
+                | TokenKind::MacroPragma(_)
+                | TokenKind::MacroError(_)
+                | TokenKind::MacroLine(_)
+        ) {
+            let stmt = self.parse_cpp_stmt();
+            return stmt;
+        }
+
         match &self.current.kind {
             TokenKind::Let => {
                 self.advance(); // 吞掉 let
@@ -698,6 +718,42 @@ impl Parser {
         expr
     }
 
+    // ==================== C 预处理指令 ====================
+
+    fn parse_cpp_stmt(&mut self) -> Statement {
+        match &self.current.kind {
+            TokenKind::MacroDefine(name, value) => {
+                let name = name.clone();
+                let value = value.clone();
+                self.advance();
+                Statement::Define { name, value }
+            }
+            _ => {
+                let directive = self.format_cpp_directive();
+                self.advance();
+                Statement::CppDirective { directive }
+            }
+        }
+    }
+
+    fn format_cpp_directive(&self) -> String {
+        match &self.current.kind {
+            TokenKind::MacroDefine(name, value) => format!("#define {} {}", name, value),
+            TokenKind::MacroUndef(s) => format!("#undef {}", s),
+            TokenKind::MacroInclude(s) => format!("#include {}", s),
+            TokenKind::MacroIfdef(s) => format!("#ifdef {}", s),
+            TokenKind::MacroIfndef(s) => format!("#ifndef {}", s),
+            TokenKind::MacroIf(s) => format!("#if {}", s),
+            TokenKind::MacroElse => "#else".to_string(),
+            TokenKind::MacroElif(s) => format!("#elif {}", s),
+            TokenKind::MacroEndif => "#endif".to_string(),
+            TokenKind::MacroPragma(s) => format!("#pragma {}", s),
+            TokenKind::MacroError(s) => format!("#error {}", s),
+            TokenKind::MacroLine(s) => format!("#line {}", s),
+            _ => unreachable!(),
+        }
+    }
+
     // ==================== 块解析 ====================
 
     pub fn parse_block(&mut self) -> Block {
@@ -754,9 +810,29 @@ impl Parser {
         let mut enums = Vec::new();
         let mut consts = Vec::new();
         let mut statics = Vec::new();
+        let mut cpp_lines = Vec::new();
 
         while self.current.kind != TokenKind::Eof {
-            if self.current.kind == TokenKind::Fn {
+            // 顶层 C 预处理指令
+            if matches!(
+                &self.current.kind,
+                TokenKind::MacroDefine(..)
+                    | TokenKind::MacroUndef(_)
+                    | TokenKind::MacroInclude(_)
+                    | TokenKind::MacroIfdef(_)
+                    | TokenKind::MacroIfndef(_)
+                    | TokenKind::MacroIf(_)
+                    | TokenKind::MacroElse
+                    | TokenKind::MacroElif(_)
+                    | TokenKind::MacroEndif
+                    | TokenKind::MacroPragma(_)
+                    | TokenKind::MacroError(_)
+                    | TokenKind::MacroLine(_)
+            ) {
+                let d = self.format_cpp_directive();
+                cpp_lines.push(d);
+                self.advance();
+            } else if self.current.kind == TokenKind::Fn {
                 functions.push(self.parse_function(false));
             } else if self.current.kind == TokenKind::Extern {
                 functions.push(self.parse_function(true));
@@ -788,6 +864,7 @@ impl Parser {
         }
 
         Program {
+            cpp_lines,
             functions,
             structs,
             enums,

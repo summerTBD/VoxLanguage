@@ -47,29 +47,39 @@ fn expand_mods_impl(source: &str, base_dir: &Path, visited: &mut HashSet<String>
     result
 }
 
-/// 预处理器：提取 # 指令 + 收集 #define 名称 + 文本替换
-pub fn extract_cpp_directives(source: &str) -> (String, Vec<(String, String)>, String) {
-    let mut directives = String::new();
+/// 收集 #define 名称 + 文本替换（不替换 #define 行自身）
+pub fn replace_defines(source: &str) -> (Vec<(String, String)>, String) {
     let mut define_names = Vec::new();
-    let mut expanded = source.to_string();
 
+    // 第一遍：收集 define 名称
     for line in source.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with('#') {
-            directives.push_str(line);
-            directives.push('\n');
-            if let Some(rest) = trimmed.strip_prefix("#define ") {
-                let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-                if parts.len() == 2 {
-                    let name = parts[0].to_string();
-                    let value = parts[1].trim().to_string();
-                    expanded = replace_ident(&expanded, &name, &value);
-                    define_names.push((name, value));
-                }
+        if let Some(rest) = trimmed.strip_prefix("#define ") {
+            let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+            if parts.len() >= 2 {
+                define_names.push((parts[0].to_string(), parts[1].trim().to_string()));
             }
         }
     }
-    (directives, define_names, expanded)
+
+    // 第二遍：在非 #define 行中替换
+    let expanded: String = source
+        .lines()
+        .map(|line| {
+            if line.trim_start().starts_with("#define ") {
+                line.to_string()
+            } else {
+                let mut result = line.to_string();
+                for (name, value) in &define_names {
+                    result = replace_ident(&result, name, value);
+                }
+                result
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    (define_names, expanded)
 }
 
 /// 在源码中替换独立的标识符（前后不是字母/数字/下划线）

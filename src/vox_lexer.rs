@@ -126,6 +126,11 @@ impl Lexer {
         let line = self.line;
         let col = self.col;
 
+        // # 预处理指令
+        if self.peek() == Some('#') {
+            return self.read_cpp_directive(line, col);
+        }
+
         let kind = match self.peek() {
             None => TokenKind::Eof,
             Some(ch) => match ch {
@@ -298,6 +303,73 @@ impl Lexer {
             }
         }
         TokenKind::StringLiteral(s)
+    }
+
+    /// 读取 C 预处理指令：#define, #ifndef, #include 等
+    fn read_cpp_directive(&mut self, line: usize, col: usize) -> Token {
+        self.advance(); // 吞掉 #
+        let kw = self.read_identifier(); // 读取关键字
+        self.skip_whitespace_in_line();
+        let rest = self.read_until_eol(); // 剩余部分
+
+        let kind = match kw.as_str() {
+            "define" => {
+                let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                if parts.len() >= 2 {
+                    TokenKind::MacroDefine(parts[0].to_string(), parts[1].trim().to_string())
+                } else {
+                    TokenKind::MacroDefine(rest, String::new())
+                }
+            }
+            "undef" => TokenKind::MacroUndef(rest),
+            "include" => TokenKind::MacroInclude(rest),
+            "ifdef" => TokenKind::MacroIfdef(rest),
+            "ifndef" => TokenKind::MacroIfndef(rest),
+            "if" => TokenKind::MacroIf(rest),
+            "elif" => TokenKind::MacroElif(rest),
+            "else" => TokenKind::MacroElse,
+            "endif" => TokenKind::MacroEndif,
+            "pragma" => TokenKind::MacroPragma(rest),
+            "error" => TokenKind::MacroError(rest),
+            "line" => TokenKind::MacroLine(rest),
+            _ => TokenKind::MacroError(format!("#{} {}", kw, rest)),
+        };
+        Token::new(kind, line, col)
+    }
+
+    fn read_identifier(&mut self) -> String {
+        let mut s = String::new();
+        while let Some(ch) = self.peek() {
+            if ch.is_alphanumeric() || ch == '_' {
+                s.push(ch);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        s
+    }
+
+    fn skip_whitespace_in_line(&mut self) {
+        while let Some(ch) = self.peek() {
+            if ch == ' ' || ch == '\t' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn read_until_eol(&mut self) -> String {
+        let mut s = String::new();
+        while let Some(ch) = self.peek() {
+            if ch == '\n' {
+                break;
+            }
+            s.push(ch);
+            self.advance();
+        }
+        s.trim().to_string()
     }
 
     /// 读取整数或浮点数

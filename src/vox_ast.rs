@@ -2,6 +2,7 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    pub cpp_lines: Vec<String>,
     pub structs: Vec<StructDef>,
     pub enums: Vec<EnumDef>,
     pub functions: Vec<Function>,
@@ -164,6 +165,13 @@ pub enum Statement {
     },
     Break,
     Continue,
+    Define {
+        name: String,
+        value: String,
+    },
+    CppDirective {
+        directive: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
