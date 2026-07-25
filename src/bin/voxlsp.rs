@@ -63,15 +63,36 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 }
 
 fn check(source: &str) -> Vec<Diagnostic> {
+    // 过滤 # 行（C 预处理指令），收集 #define 名称
+    let mut define_names: Vec<(String, String)> = Vec::new();
+    let clean_source: String = source
+        .lines()
+        .filter(|l| {
+            if l.trim_start().starts_with('#') {
+                if let Some(rest) = l.trim_start().strip_prefix("#define ") {
+                    let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                    if parts.len() == 2 {
+                        define_names.push((parts[0].into(), parts[1].trim().into()));
+                    }
+                }
+                false // 移除 # 行
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let prelude = include_str!("../../prelude.vox");
     let prelude_lines = prelude.lines().count() as u32;
-    let full_source = format!("{}\n{}", prelude, source);
+    let full_source = format!("{}\n{}", prelude, clean_source);
 
     match catch_unwind(std::panic::AssertUnwindSafe(|| {
         let lexer = Lexer::new(&full_source);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         let mut typeck = TypeChecker::new();
+        typeck.register_defines(&define_names);
         typeck.check(&program);
     })) {
         Ok(()) => vec![],
