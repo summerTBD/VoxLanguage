@@ -1,0 +1,8 @@
+#ifndef B_H
+#define B_H
+
+fn hello_b() {
+    printf("B\n");
+}
+
+#endif

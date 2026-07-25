@@ -49,10 +49,11 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 
     let base_dir = {
         let s = uri.as_str();
-        // file:///D:/path/file.vox → D:/path/
         if let Some(path) = s.strip_prefix("file:///") {
-            let path = path.rsplit_once('/').map(|(d, _)| d).unwrap_or(".");
-            std::path::Path::new(path).to_path_buf()
+            // URL 解码 %3A → : 等
+            let decoded = path.replace("%3A", ":").replace("%3a", ":");
+            let path = decoded.rsplit_once('/').map(|(d, _)| d).unwrap_or(".");
+            std::path::Path::new(&*path).to_path_buf()
         } else {
             std::path::Path::new(".").to_path_buf()
         }
@@ -73,14 +74,23 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 }
 
 fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
-    // 写到原文件同目录，保证 mod 相对路径正确
     let tmp = base_dir.join(format!("_vox_lsp_{}.vox", std::process::id()));
     std::fs::write(&tmp, source).ok();
 
     let exe = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("vox-language.exe")))
-        .unwrap_or_else(|| std::path::Path::new("vox-language.exe").to_path_buf());
+        .and_then(|p| {
+            let dir = p.parent().unwrap_or(std::path::Path::new("."));
+            let candidates = [dir.join("voxc.exe"), dir.join("vox-language.exe")];
+            candidates.into_iter().find(|c| c.exists())
+        })
+        .unwrap_or_else(|| std::path::Path::new("voxc.exe").to_path_buf());
+
+    eprintln!(
+        "Vox LSP check: exe={}, tmp={}",
+        exe.display(),
+        tmp.display()
+    );
 
     let output = std::process::Command::new(&exe)
         .arg(&tmp)
@@ -90,12 +100,22 @@ fn check(source: &str, base_dir: &std::path::Path) -> Vec<Diagnostic> {
     let _ = std::fs::remove_file(&tmp);
 
     match output {
-        Ok(o) if o.status.success() => vec![],
         Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            parse_diagnostics(&stderr)
+            eprintln!(
+                "Vox LSP: exit={}, stderr={}",
+                o.status,
+                String::from_utf8_lossy(&o.stderr)
+            );
+            if o.status.success() {
+                vec![]
+            } else {
+                parse_diagnostics(&String::from_utf8_lossy(&o.stderr))
+            }
         }
-        Err(_) => vec![],
+        Err(e) => {
+            eprintln!("Vox LSP: spawn failed: {}", e);
+            vec![]
+        }
     }
 }
 

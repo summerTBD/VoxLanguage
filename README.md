@@ -2,6 +2,33 @@
 
 A C-level systems language that compiles to C. Syntax inspired by Rust, semantics mapped 1:1 to C. Built-in Boehm GC with opt-out (`--no-gc`).
 
+## Installation
+
+### 从源码构建
+```powershell
+git clone https://github.com/summerTBD/VoxLanguage
+cd VoxLanguage
+cargo build --release
+# 输出在 bin/ 目录
+```
+
+### 发布包（给别人用）
+下载 `bin/` 整个文件夹，放到任意位置，加到系统 PATH。
+需要 `gcc`（MinGW-w64）。
+
+```
+bin/
+├── voxc.exe          # 编译器
+├── voxlsp.exe        # LSP 服务器
+├── vendor/           # Boehm GC 静态库
+├── package.json      # VS Code 扩展清单
+├── extension.js      # VS Code 扩展入口
+├── syntaxes/         # 语法高亮
+└── icon.png          # 图标
+```
+
+**VS Code 扩展安装**：把 `bin/` 目录创建 Junction 到 `~/.vscode/extensions/vox.vox-language-0.1.0`。
+
 ## Quick Start
 
 ```vox
@@ -13,6 +40,7 @@ fn main() {
 
 ```powershell
 voxc hello.vox    # → hello.exe
+voxc hello.vox --no-gc   # 不用 GC
 ./hello.exe       # → hello world
 ```
 
@@ -137,11 +165,20 @@ static mut COUNTER: i32 = 0;
 
 ## C Macros
 
+支持全部 C 预处理指令，作为一等语法，原位透传：
+
 ```vox
-#define MAX_SIZE 1024
-#define GREET "hello"
-// 自动推断类型，Vox 可引用，C 预处理器展开
+#ifndef VOX_H
+#define VOX_H
+#define BUF_SIZE 1024
+
+fn main() {
+    let arr: [i32; BUF_SIZE] = ...;
+}
+#endif
 ```
+
+`#define` 名称自动做文本替换，`#ifndef`/`#endif` 保持原位保护代码。
 
 ## Modules
 
@@ -188,7 +225,9 @@ src/
 
 ## VS Code Extension
 
-`vscode-vox/` — 语法高亮 + LSP 错误标红。`Ctrl+Shift+B` 编译。
+语法高亮 + LSP 错误标红。`Ctrl+Shift+B` 编译。
+
+扩展文件在 `bin/` 目录（和 exe 同目录），LSP 调 `voxc --check` 保证和编译器 100% 一致。
 
 ## Requirements
 

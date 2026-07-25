@@ -1,0 +1,8 @@
+#ifndef A_H
+#define A_H
+
+fn hello_a() {
+    printf("A\n");
+}
+
+#endif
