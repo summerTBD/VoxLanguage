@@ -60,25 +60,21 @@ impl Codegen {
         // 头文件
         self.emit("#include <stdint.h>");
         self.emit("#include <inttypes.h>");
+        self.emit("#include <stdio.h>");
+        self.emit("#include <stdlib.h>");
+        self.emit("#include <string.h>");
         if self.use_gc {
             self.emit("#include <gc.h>");
         }
         self.emit("");
-        if !self.use_gc {
-            self.emit("// === 非 GC 模式 ===");
-            self.emit("#include <stdlib.h>");
-            self.emit("");
-        }
-        self.emit("// === C 运行时依赖 ===");
-        self.emit("extern int printf(const char* fmt, ...);");
-        self.emit("extern int scanf(const char* fmt, ...);");
-        self.emit("extern int puts(const char* s);");
-        self.emit("");
 
-        // 函数声明（去重）
+        // 函数声明（去重），跳过 extern 函数（由标准头文件提供）
         self.emit("// === 函数声明 ===");
         let mut declared = std::collections::HashSet::new();
         for f in program.functions() {
+            if f.is_extern {
+                continue;
+            }
             if !declared.contains(&f.name) {
                 self.emit_function_decl(f);
                 declared.insert(f.name.clone());
