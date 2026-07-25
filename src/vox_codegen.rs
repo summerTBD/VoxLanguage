@@ -543,13 +543,19 @@ impl Codegen {
                     if self.enum_names.contains(obj_name) {
                         return field.clone();
                     }
-                    // new 出来的变量是指针，用 ->；栈变量用 .
                     if self.ptr_vars.contains(obj_name) {
                         return format!("{}->{}", obj, field);
                     }
                     return format!("{}.{}", obj, field);
                 }
-                if matches!(object.as_ref(), Expression::Identifier(_)) {
+                // 链式访问（sb->inner.len）：非标识符对象大概率是指针，用 ->
+                let use_arrow = matches!(
+                    object.as_ref(),
+                    Expression::FieldAccess { .. }
+                        | Expression::Deref(..)
+                        | Expression::Index { .. }
+                );
+                if use_arrow {
                     format!("{}->{}", obj, field)
                 } else {
                     format!("{}.{}", obj, field)
