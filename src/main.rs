@@ -5,10 +5,12 @@ use vox_language::{
     vox_codegen::Codegen, vox_lexer::Lexer, vox_parser::Parser, vox_typeck::TypeChecker,
 };
 
-/// 预处理器：提取 C 预处理指令，同时收集 #define 名称供 typeck 识别
-fn extract_cpp_directives(source: &str) -> (String, Vec<(String, String)>) {
+/// 预处理器：提取 # 指令 + 收集 #define 名称 + 文本替换
+fn extract_cpp_directives(source: &str) -> (String, Vec<(String, String)>, String) {
     let mut directives = String::new();
     let mut define_names = Vec::new();
+    let mut expanded = source.to_string();
+
     for line in source.lines() {
         let trimmed = line.trim_start();
         if trimmed.starts_with('#') {
@@ -19,12 +21,40 @@ fn extract_cpp_directives(source: &str) -> (String, Vec<(String, String)>) {
                 if parts.len() == 2 {
                     let name = parts[0].to_string();
                     let value = parts[1].trim().to_string();
+                    // 文本替换：在源码中把 NAME 替换为 value（仅替换独立标识符）
+                    expanded = replace_ident(&expanded, &name, &value);
                     define_names.push((name, value));
                 }
             }
         }
     }
-    (directives, define_names)
+    (directives, define_names, expanded)
+}
+
+/// 在源码中替换独立的标识符（前后不是字母/数字/下划线）
+fn replace_ident(source: &str, name: &str, value: &str) -> String {
+    let mut result = String::with_capacity(source.len());
+    let bytes = source.as_bytes();
+    let name_bytes = name.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + name_bytes.len() <= bytes.len()
+            && &bytes[i..i + name_bytes.len()] == name_bytes
+            && (i == 0 || !is_ident_char(bytes[i - 1]))
+            && (i + name_bytes.len() == bytes.len() || !is_ident_char(bytes[i + name_bytes.len()]))
+        {
+            result.push_str(value);
+            i += name_bytes.len();
+        } else {
+            result.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    result
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// 预处理器：展开 mod "file.vox"; 指令（支持嵌套，自动去重）
@@ -92,9 +122,9 @@ fn main() {
     let base_dir = input_path.parent().unwrap_or(Path::new("."));
     let user_source = expand_mods(&user_source, base_dir);
 
-    // 预处理器：提取 C 宏（#define / #include）→ 透传到 C 代码顶部
-    let (cpp_directives, define_names) = extract_cpp_directives(&user_source);
-    // 移除 # 行
+    // 预处理器：提取 C 宏 + 文本替换 #define 名称
+    let (cpp_directives, define_names, user_source) = extract_cpp_directives(&user_source);
+    // 移除 # 行（已提取到 directives，宏名已替换为值）
     let user_source: String = user_source
         .lines()
         .filter(|l| !l.trim_start().starts_with('#'))

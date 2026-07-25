@@ -63,23 +63,25 @@ fn handle(conn: &Connection, n: &lsp_server::Notification) {
 }
 
 fn check(source: &str) -> Vec<Diagnostic> {
-    // 过滤 # 行（C 预处理指令），收集 #define 名称
+    // 过滤 # 行并替换 #define 名称
     let mut define_names: Vec<(String, String)> = Vec::new();
-    let clean_source: String = source
-        .lines()
-        .filter(|l| {
-            if l.trim_start().starts_with('#') {
-                if let Some(rest) = l.trim_start().strip_prefix("#define ") {
-                    let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-                    if parts.len() == 2 {
-                        define_names.push((parts[0].into(), parts[1].trim().into()));
-                    }
-                }
-                false // 移除 # 行
-            } else {
-                true
+    let mut expanded = source.to_string();
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("#define ") {
+            let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+            if parts.len() == 2 {
+                let name = parts[0];
+                let value = parts[1].trim();
+                expanded = replace_ident(&expanded, name, value);
+                define_names.push((name.into(), value.into()));
             }
-        })
+        }
+    }
+    // 移除所有 # 行
+    let clean_source: String = expanded
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -136,4 +138,29 @@ fn parse_loc(msg: &str) -> (u32, u32, String) {
         }
     }
     (1, 1, msg.into())
+}
+
+fn replace_ident(source: &str, name: &str, value: &str) -> String {
+    let mut result = String::with_capacity(source.len());
+    let bytes = source.as_bytes();
+    let name_bytes = name.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + name_bytes.len() <= bytes.len()
+            && &bytes[i..i + name_bytes.len()] == name_bytes
+            && (i == 0 || !is_ident_char(bytes[i - 1]))
+            && (i + name_bytes.len() == bytes.len() || !is_ident_char(bytes[i + name_bytes.len()]))
+        {
+            result.push_str(value);
+            i += name_bytes.len();
+        } else {
+            result.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    result
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
