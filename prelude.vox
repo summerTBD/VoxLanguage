@@ -1,5 +1,15 @@
 // === Vox Prelude: C 标准函数声明 ===
 
+// inttypes.h 格式化宏（可移植 printf）
+#define PRId8 "hhd"
+#define PRId16 "hd"
+#define PRId32 "d"
+#define PRId64 "lld"
+#define PRIu8 "hhu"
+#define PRIu16 "hu"
+#define PRIu32 "u"
+#define PRIu64 "llu"
+
 // 注意：printf / scanf 由编译器内置处理，不需在此声明
 
 extern fn puts(s: str): i32;

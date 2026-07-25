@@ -549,6 +549,12 @@ impl Codegen {
                 let ty = self.type_to_c(target);
                 format!("(({}){})", ty, val)
             }
+            Expression::Printf(content) => {
+                format!("printf({})", content)
+            }
+            Expression::Scanf(content) => {
+                format!("scanf({})", content)
+            }
             Expression::Sizeof(ty) => {
                 format!("sizeof({})", self.type_to_c(ty))
             }

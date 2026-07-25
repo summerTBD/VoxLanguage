@@ -504,6 +504,16 @@ impl Parser {
                 let inner = self.parse_postfix();
                 Expression::Not(Box::new(inner))
             }
+            TokenKind::Printf(content) => {
+                let content = content.clone();
+                self.advance();
+                Expression::Printf(content)
+            }
+            TokenKind::Scanf(content) => {
+                let content = content.clone();
+                self.advance();
+                Expression::Scanf(content)
+            }
             TokenKind::Sizeof => {
                 self.advance(); // 吞掉 sizeof
                 self.expect(TokenKind::LParen);

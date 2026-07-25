@@ -464,6 +464,7 @@ impl TypeChecker {
             }
             Expression::Cast { expr: _, target } => target.clone(),
             Expression::Sizeof(_) => Type::Int(Signedness::Unsigned, 64),
+            Expression::Printf(_) | Expression::Scanf(_) => Type::Int(Signedness::Signed, 32),
             Expression::Deref(inner) => {
                 let inner_ty = self.infer_expr(inner);
                 match inner_ty {

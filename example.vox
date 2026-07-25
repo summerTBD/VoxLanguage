@@ -1,4 +1,4 @@
 fn main() {
     let a : i32 = 1;
-    printf("%d", a);
+    printf(" %" PRId32 " ", a);  // 空格隔开，利用 C 字符串拼接
 }

@@ -372,6 +372,25 @@ impl Lexer {
         s.trim().to_string()
     }
 
+    /// 读取匹配的括号内容（已跳过开括号）
+    fn read_balanced_parens(&mut self) -> String {
+        let mut depth = 1u32;
+        let mut s = String::new();
+        while let Some(ch) = self.peek() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            s.push(ch);
+            self.advance();
+        }
+        s
+    }
+
     /// 读取整数或浮点数
     fn read_number(&mut self) -> TokenKind {
         let mut num_str = String::new();
@@ -453,6 +472,19 @@ impl Lexer {
             "bool" => TokenKind::KwBool,
             "str" => TokenKind::KwStr,
             "void" => TokenKind::KwVoid,
+            // printf / scanf 整段透传
+            "printf" if self.peek() == Some('(') => {
+                self.advance(); // 吞掉 (
+                let content = self.read_balanced_parens();
+                self.advance(); // 吞掉 )
+                TokenKind::Printf(content)
+            }
+            "scanf" if self.peek() == Some('(') => {
+                self.advance();
+                let content = self.read_balanced_parens();
+                self.advance();
+                TokenKind::Scanf(content)
+            }
             _ => TokenKind::Identifier(name),
         }
     }

@@ -97,6 +97,10 @@ pub enum TokenKind {
     MacroPragma(String),         // #pragma ...
     MacroError(String),          // #error msg
     MacroLine(String),           // #line N ["file"]
+
+    // --- 透传 C 函数 ---
+    Printf(String), // printf("...", args) 整段透传
+    Scanf(String),  // scanf("...", args) 整段透传
 }
 
 /// 源码中的一个 Token，携带位置信息

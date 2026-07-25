@@ -17,19 +17,64 @@ pub struct Program {
 
 impl Program {
     pub fn functions(&self) -> Vec<&Function> {
-        self.items.iter().filter_map(|i| if let TopLevelItem::Function(f) = i { Some(f) } else { None }).collect()
+        self.items
+            .iter()
+            .filter_map(|i| {
+                if let TopLevelItem::Function(f) = i {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     pub fn structs(&self) -> Vec<&StructDef> {
-        self.items.iter().filter_map(|i| if let TopLevelItem::Struct(s) = i { Some(s) } else { None }).collect()
+        self.items
+            .iter()
+            .filter_map(|i| {
+                if let TopLevelItem::Struct(s) = i {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     pub fn enums(&self) -> Vec<&EnumDef> {
-        self.items.iter().filter_map(|i| if let TopLevelItem::Enum(e) = i { Some(e) } else { None }).collect()
+        self.items
+            .iter()
+            .filter_map(|i| {
+                if let TopLevelItem::Enum(e) = i {
+                    Some(e)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     pub fn consts(&self) -> Vec<&ConstDef> {
-        self.items.iter().filter_map(|i| if let TopLevelItem::Const(c) = i { Some(c) } else { None }).collect()
+        self.items
+            .iter()
+            .filter_map(|i| {
+                if let TopLevelItem::Const(c) = i {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     pub fn statics(&self) -> Vec<&StaticDef> {
-        self.items.iter().filter_map(|i| if let TopLevelItem::Static(s) = i { Some(s) } else { None }).collect()
+        self.items
+            .iter()
+            .filter_map(|i| {
+                if let TopLevelItem::Static(s) = i {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -258,6 +303,8 @@ pub enum Expression {
         target: Type,
     },
     Sizeof(Type),
+    Printf(String),
+    Scanf(String),
     Deref(Box<Expression>),
     ArrayLiteral(Vec<Expression>),
     Index {

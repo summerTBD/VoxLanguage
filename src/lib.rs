@@ -47,22 +47,28 @@ fn expand_mods_impl(source: &str, base_dir: &Path, visited: &mut HashSet<String>
     result
 }
 
-/// 收集 #define 名称 + 文本替换（不替换 #define 行自身）
+/// 收集 #define 名称 + 文本替换（字符串值的不替换，透传给 C）
 pub fn replace_defines(source: &str) -> (Vec<(String, String)>, String) {
     let mut define_names = Vec::new();
+    let mut text_replace: Vec<(String, String)> = Vec::new();
 
-    // 第一遍：收集 define 名称
     for line in source.lines() {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("#define ") {
             let parts: Vec<&str> = rest.splitn(2, ' ').collect();
             if parts.len() >= 2 {
-                define_names.push((parts[0].to_string(), parts[1].trim().to_string()));
+                let name = parts[0].to_string();
+                let value = parts[1].trim().to_string();
+                define_names.push((name.clone(), value.clone()));
+                // 只替换非字符串值（数字/标识符）的宏，字符串值透传给 C
+                if !value.starts_with('"') {
+                    text_replace.push((name, value));
+                }
             }
         }
     }
 
-    // 第二遍：在非 #define 行中替换
+    // 第二遍：只替换非字符串值的宏
     let expanded: String = source
         .lines()
         .map(|line| {
@@ -70,7 +76,7 @@ pub fn replace_defines(source: &str) -> (Vec<(String, String)>, String) {
                 line.to_string()
             } else {
                 let mut result = line.to_string();
-                for (name, value) in &define_names {
+                for (name, value) in &text_replace {
                     result = replace_ident(&result, name, value);
                 }
                 result

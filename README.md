@@ -83,10 +83,11 @@ fn add(a: i32, b: i32): i32 {
 extern fn puts(s: str): i32;
 ```
 
-**Built-in** — `printf` / `scanf` 变参透传：
+**printf / scanf** — lexer 级整段透传，支持 `PRId32` 等 C 宏：
 
 ```vox
 printf("x=%d, y=%f\n", x, y);
+printf("i32 = %" PRId32 "\n", a);   // C 字符串拼接
 scanf("%d", &x);
 ```
 

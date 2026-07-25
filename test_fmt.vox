@@ -1,0 +1,4 @@
+fn main() {
+    let a: i32 = 42;
+    printf("i32 = %" PRId32 "\n", a);
+}
